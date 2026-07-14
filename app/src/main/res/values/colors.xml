@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand coral: used for the launcher icon and the cold-start window so the
+         launch flows straight into the coral splash without a color flash. -->
+    <color name="brand_coral">#F2765C</color>
+    <color name="brand_coral_dark">#C1432B</color>
+</resources>
