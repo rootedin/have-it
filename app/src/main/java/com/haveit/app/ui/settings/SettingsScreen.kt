@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,11 +27,14 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.data.backup.BackupManager
 import com.haveit.app.data.settings.AppTheme
+import com.haveit.app.notification.AlarmSounds
 
 @Composable
 fun SettingsScreen(
@@ -51,6 +56,8 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHost = remember { SnackbarHostState() }
+    var showResetDialog by remember { mutableStateOf(false) }
+    var showSoundDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -92,7 +99,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(16.dp))
                 SectionTitle("루틴")
                 Spacer(Modifier.height(8.dp))
-                NavRow(title = "루틴 관리", subtitle = "습관을 아침·저녁으로 묶기", onClick = onOpenRoutines)
+                NavRow(title = "루틴 관리", subtitle = "습관을 원하는 순서대로 묶기", onClick = onOpenRoutines)
 
                 Spacer(Modifier.height(24.dp))
                 SectionTitle("테마")
@@ -167,6 +174,12 @@ fun SettingsScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                NavRow(
+                    title = "알람음",
+                    subtitle = AlarmSounds.byKey(current.alarmSoundKey).label,
+                    onClick = { showSoundDialog = true },
+                )
 
                 Spacer(Modifier.height(24.dp))
                 SectionTitle("데이터")
@@ -188,11 +201,90 @@ fun SettingsScreen(
                     subtitle = "기존 데이터를 덮어써요",
                     onClick = { importLauncher.launch(arrayOf("application/json")) },
                 )
+                Spacer(Modifier.height(8.dp))
+                DangerRow(
+                    title = "데이터 초기화",
+                    subtitle = "모든 습관·기록·루틴을 삭제해요",
+                    onClick = { showResetDialog = true },
+                )
 
                 Spacer(Modifier.height(40.dp))
             }
         }
     }
+
+    if (showSoundDialog) {
+        val currentKey = settings?.alarmSoundKey
+        AlarmSoundDialog(
+            currentKey = currentKey,
+            onSelect = { viewModel.setAlarmSound(it) },
+            onDismiss = {
+                showSoundDialog = false
+                viewModel.stopPreview()
+            },
+        )
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("데이터 초기화") },
+            text = { Text("모든 습관, 기록, 루틴이 삭제돼요. 되돌릴 수 없어요.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetDialog = false
+                    viewModel.resetAllData()
+                }) {
+                    Text("초기화", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("취소") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun AlarmSoundDialog(
+    currentKey: String?,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("알람음") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "탭하면 미리 들어볼 수 있어요",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                val selectedKey = currentKey ?: AlarmSounds.DEFAULT_KEY
+                AlarmSounds.ALL.forEach { sound ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(sound.key) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = sound.key == selectedKey,
+                            onClick = { onSelect(sound.key) },
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(text = sound.label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("완료") }
+        },
+    )
 }
 
 @Composable
@@ -228,6 +320,29 @@ private fun NavRow(title: String, subtitle: String, onClick: () -> Unit) {
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DangerRow(title: String, subtitle: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

@@ -40,11 +40,43 @@ class ReminderScheduler(private val context: Context) {
         alarmManager.cancel(pendingIntent(habitId, null))
     }
 
+    /** Schedules a follow-up check [intervalMinutes] from now that re-notifies if the habit is still undone. */
+    fun scheduleSnooze(habitId: String, habitName: String, snoozeCount: Int, intervalMinutes: Int) {
+        val triggerAt = System.currentTimeMillis() + intervalMinutes * 60_000L
+        val pending = snoozePendingIntent(habitId, habitName, snoozeCount)
+        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        if (canExact) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
+        }
+    }
+
+    fun cancelSnooze(habitId: String) {
+        alarmManager.cancel(snoozePendingIntent(habitId, null, 0))
+    }
+
     private fun pendingIntent(habitId: String, habitName: String?): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
             action = ReminderReceiver.ACTION_FIRE
             data = android.net.Uri.parse("haveit://reminder/$habitId")
             putExtra(ReminderReceiver.EXTRA_HABIT_ID, habitId)
+            if (habitName != null) putExtra(ReminderReceiver.EXTRA_HABIT_NAME, habitName)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            habitId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun snoozePendingIntent(habitId: String, habitName: String?, snoozeCount: Int): PendingIntent {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            action = ReminderReceiver.ACTION_SNOOZE_CHECK
+            data = android.net.Uri.parse("haveit://reminder-snooze/$habitId")
+            putExtra(ReminderReceiver.EXTRA_HABIT_ID, habitId)
+            putExtra(ReminderReceiver.EXTRA_SNOOZE_COUNT, snoozeCount)
             if (habitName != null) putExtra(ReminderReceiver.EXTRA_HABIT_NAME, habitName)
         }
         return PendingIntent.getBroadcast(

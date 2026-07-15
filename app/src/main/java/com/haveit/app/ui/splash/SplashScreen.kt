@@ -26,9 +26,10 @@ import kotlinx.coroutines.launch
 
 /**
  * Brand loading animation:
- * 0ms "Habit?" -> 1000ms hold -> swaps to "Have It!" in the same spot with a
- * 1 -> 1.06 -> 1 scale bounce, held for ~2s, then hands off to home.
+ * 0ms "Habit?" -> 667ms hold -> swaps to "Have It!" in the same spot with a
+ * 1 -> 1.06 -> 1 scale bounce, held for ~1.33s, then hands off to home.
  * Always rendered on the brand coral regardless of app theme.
+ * (Total ~2s — proportionally scaled down from the original 3s timing.)
  */
 @Composable
 fun SplashScreen(onSplashFinished: () -> Unit) {
@@ -36,13 +37,13 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
     var showHaveIt by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        delay(1000)
+        delay(667)
         showHaveIt = true
         launch {
-            scale.animateTo(1.06f, animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing))
-            scale.animateTo(1f, animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing))
+            scale.animateTo(1.06f, animationSpec = tween(durationMillis = 233, easing = FastOutSlowInEasing))
+            scale.animateTo(1f, animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing))
         }
-        delay(2000) // keep "Have It!" visible for ~2 seconds
+        delay(1333) // keep "Have It!" visible for ~1.33 seconds
         onSplashFinished()
     }
 

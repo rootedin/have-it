@@ -2,7 +2,6 @@ package com.haveit.app.data.local
 
 import androidx.room.TypeConverter
 import com.haveit.app.data.local.entity.HabitFrequency
-import com.haveit.app.data.local.entity.TimeOfDay
 
 class Converters {
 
@@ -25,10 +24,4 @@ class Converters {
 
     @TypeConverter
     fun toHabitFrequency(value: String): HabitFrequency = HabitFrequency.valueOf(value)
-
-    @TypeConverter
-    fun fromTimeOfDay(value: TimeOfDay): String = value.name
-
-    @TypeConverter
-    fun toTimeOfDay(value: String): TimeOfDay = TimeOfDay.valueOf(value)
 }

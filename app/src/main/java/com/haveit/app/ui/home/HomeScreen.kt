@@ -152,7 +152,7 @@ private fun HomeHeader(date: LocalDate, onOpenReport: () -> Unit, onOpenSettings
         IconButton(onClick = onOpenReport) {
             Icon(
                 Icons.Default.DateRange,
-                contentDescription = "주간 리포트",
+                contentDescription = "리포트",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

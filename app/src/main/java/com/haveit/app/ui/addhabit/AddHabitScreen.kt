@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
+import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.data.local.entity.HabitFrequency
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.ui.components.HabitColorOptions
@@ -72,7 +74,11 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
     var trigger by remember { mutableStateOf("") }
     var reminderHour by remember { mutableStateOf<Int?>(null) }
     var reminderMinute by remember { mutableStateOf<Int?>(null) }
+    var reminderSnoozeMinutes by remember { mutableStateOf(HabitEntity.DEFAULT_SNOOZE_MINUTES) }
+    var reminderSnoozeMaxCount by remember { mutableStateOf(HabitEntity.DEFAULT_SNOOZE_MAX_COUNT) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showEmojiInput by remember { mutableStateOf(false) }
+    val customEmoji = emoji.takeIf { it.isNotBlank() && it !in HabitEmojiOptions }
 
     LaunchedEffect(prefill.loaded) {
         if (prefill.loaded && !initialized) {
@@ -84,6 +90,8 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             trigger = prefill.trigger
             reminderHour = prefill.reminderHour
             reminderMinute = prefill.reminderMinute
+            reminderSnoozeMinutes = prefill.reminderSnoozeMinutes
+            reminderSnoozeMaxCount = prefill.reminderSnoozeMaxCount
             initialized = true
         }
     }
@@ -134,32 +142,57 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             SectionTitle("아이콘")
             Spacer(Modifier.height(10.dp))
-            HabitEmojiOptions.chunked(8).forEach { rowEmojis ->
+            val emojiTiles: List<String?> =
+                HabitEmojiOptions + listOfNotNull(customEmoji) + listOf(null)
+            emojiTiles.chunked(8).forEach { rowTiles ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    rowEmojis.forEach { candidate ->
-                        val selected = candidate == emoji
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                                    else MaterialTheme.colorScheme.surfaceVariant,
+                    rowTiles.forEach { candidate ->
+                        if (candidate == null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        width = 2.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                        shape = CircleShape,
+                                    )
+                                    .clickable { showEmojiInput = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "아이콘 직접 입력",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
                                 )
-                                .border(
-                                    width = 2.dp,
-                                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                    shape = CircleShape,
-                                )
-                                .clickable { emoji = candidate },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(text = candidate, fontSize = 19.sp)
+                            }
+                        } else {
+                            val selected = candidate == emoji
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                    )
+                                    .border(
+                                        width = 2.dp,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        shape = CircleShape,
+                                    )
+                                    .clickable { emoji = candidate },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(text = candidate, fontSize = 19.sp)
+                            }
                         }
                     }
                 }
@@ -244,6 +277,7 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             SectionTitle("리마인더 (선택)")
             Spacer(Modifier.height(10.dp))
+            val hasReminder = reminderHour != null && reminderMinute != null
             Surface(
                 onClick = { showTimePicker = true },
                 shape = MaterialTheme.shapes.medium,
@@ -255,7 +289,6 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val hasReminder = reminderHour != null && reminderMinute != null
                     Text(
                         text = if (hasReminder) {
                             "매일 %02d:%02d 알림".format(reminderHour, reminderMinute)
@@ -274,6 +307,58 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
                         Text("🔔", fontSize = 18.sp)
                     }
                 }
+            }
+
+            if (hasReminder) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "반복 간격",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SnoozeIntervalOptions.forEach { minutes ->
+                        FrequencyChip("${minutes}분마다", reminderSnoozeMinutes == minutes) {
+                            // Re-derive the count so the total nag window (e.g. "1시간") stays put
+                            // when only the interval changes.
+                            val impliedTotal = reminderSnoozeMaxCount * reminderSnoozeMinutes
+                            reminderSnoozeMinutes = minutes
+                            reminderSnoozeMaxCount =
+                                if (impliedTotal == 0) 0 else (impliedTotal / minutes).coerceAtLeast(1)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "안 끝내면 그만 알리기",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SnoozeDurationOptionsMinutes.forEach { durationMinutes ->
+                        val count = if (durationMinutes == 0) {
+                            0
+                        } else {
+                            (durationMinutes / reminderSnoozeMinutes).coerceAtLeast(1)
+                        }
+                        val label = when {
+                            durationMinutes == 0 -> "반복 안 함"
+                            durationMinutes % 60 == 0 -> "${durationMinutes / 60}시간 후"
+                            else -> "${durationMinutes}분 후"
+                        }
+                        FrequencyChip(label, reminderSnoozeMaxCount == count) {
+                            reminderSnoozeMaxCount = count
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = snoozeSummary(reminderSnoozeMinutes, reminderSnoozeMaxCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Spacer(Modifier.height(24.dp))
@@ -301,6 +386,8 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
                         trigger = trigger,
                         reminderHour = reminderHour,
                         reminderMinute = reminderMinute,
+                        reminderSnoozeMinutes = reminderSnoozeMinutes,
+                        reminderSnoozeMaxCount = reminderSnoozeMaxCount,
                         onSaved = onBack,
                     )
                 },
@@ -328,6 +415,68 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             onDismiss = { showTimePicker = false },
         )
     }
+
+    if (showEmojiInput) {
+        CustomEmojiDialog(
+            initialValue = customEmoji.orEmpty(),
+            onConfirm = { value ->
+                emoji = value
+                showEmojiInput = false
+            },
+            onDismiss = { showEmojiInput = false },
+        )
+    }
+}
+
+@Composable
+private fun CustomEmojiDialog(
+    initialValue: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf(initialValue) }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "아이콘 직접 입력",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                )
+                OutlinedTextField(
+                    value = input,
+                    // Caps well short of pasted text while still fitting multi-codepoint
+                    // emoji (skin tone modifiers, ZWJ sequences like family/couple emoji).
+                    onValueChange = { input = it.take(8) },
+                    placeholder = { Text("😀") },
+                    supportingText = { Text("키보드의 이모지 버튼으로 입력하세요") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onDismiss) { Text("취소") }
+                    TextButton(
+                        onClick = { onConfirm(input.trim()) },
+                        enabled = input.trim().isNotEmpty(),
+                    ) { Text("확인") }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -338,7 +487,7 @@ private fun ReminderTimeDialog(
     onConfirm: (Int, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val state = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = true)
+    val state = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = false)
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
@@ -355,7 +504,7 @@ private fun ReminderTimeDialog(
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
                 )
-                TimePicker(state = state)
+                TimeInput(state = state)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -386,4 +535,16 @@ private fun FrequencyChip(label: String, selected: Boolean, onClick: () -> Unit)
         onClick = onClick,
         label = { Text(label) },
     )
+}
+
+private val SnoozeIntervalOptions = listOf(5, 10, 15, 30)
+
+/** Minutes until the nag gives up, per [FrequencyChip]; 0 means "don't repeat". */
+private val SnoozeDurationOptionsMinutes = listOf(0, 30, 60, 120)
+
+private fun snoozeSummary(intervalMinutes: Int, maxCount: Int): String {
+    if (maxCount <= 0) return "체크할 때까지 딱 한 번만 알려요"
+    val totalMinutes = intervalMinutes * maxCount
+    val durationLabel = if (totalMinutes % 60 == 0) "${totalMinutes / 60}시간" else "${totalMinutes}분"
+    return "체크 안 하면 ${intervalMinutes}분마다, 최대 ${maxCount}회(약 $durationLabel)까지 다시 알려요"
 }

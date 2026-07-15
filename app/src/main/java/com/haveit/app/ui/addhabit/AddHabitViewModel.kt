@@ -27,6 +27,8 @@ data class AddHabitFormState(
     val trigger: String = "",
     val reminderHour: Int? = null,
     val reminderMinute: Int? = null,
+    val reminderSnoozeMinutes: Int = HabitEntity.DEFAULT_SNOOZE_MINUTES,
+    val reminderSnoozeMaxCount: Int = HabitEntity.DEFAULT_SNOOZE_MAX_COUNT,
 )
 
 class AddHabitViewModel(
@@ -60,6 +62,8 @@ class AddHabitViewModel(
                         trigger = h.triggerSentence.orEmpty(),
                         reminderHour = h.reminderHour,
                         reminderMinute = h.reminderMinute,
+                        reminderSnoozeMinutes = h.reminderSnoozeMinutes,
+                        reminderSnoozeMaxCount = h.reminderSnoozeMaxCount,
                     )
                 }
             }
@@ -77,6 +81,8 @@ class AddHabitViewModel(
         trigger: String,
         reminderHour: Int?,
         reminderMinute: Int?,
+        reminderSnoozeMinutes: Int,
+        reminderSnoozeMaxCount: Int,
         onSaved: () -> Unit,
     ) {
         viewModelScope.launch {
@@ -90,6 +96,8 @@ class AddHabitViewModel(
                 triggerSentence = trigger.trim().ifBlank { null },
                 reminderHour = reminderHour,
                 reminderMinute = reminderMinute,
+                reminderSnoozeMinutes = reminderSnoozeMinutes,
+                reminderSnoozeMaxCount = reminderSnoozeMaxCount,
                 createdAt = loadedCreatedAt,
                 archivedAt = loadedArchivedAt,
             )

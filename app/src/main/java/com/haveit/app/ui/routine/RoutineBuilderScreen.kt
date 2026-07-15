@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,14 +46,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.data.local.entity.RoutineEntity
-import com.haveit.app.data.local.entity.TimeOfDay
 import com.haveit.app.ui.components.HabitIconBubble
 import com.haveit.app.ui.components.parseHabitColor
 
 private data class RoutineDraft(
     val id: String?,
     val name: String,
-    val timeOfDay: TimeOfDay,
     val orderedHabitIds: List<String>,
 )
 
@@ -73,7 +70,7 @@ fun RoutineBuilderScreen(onBack: () -> Unit) {
             onChange = { draft = it },
             onCancel = { draft = null },
             onSave = {
-                viewModel.save(editing.id, editing.name, editing.timeOfDay, editing.orderedHabitIds)
+                viewModel.save(editing.id, editing.name, editing.orderedHabitIds)
                 draft = null
             },
         )
@@ -97,7 +94,7 @@ fun RoutineBuilderScreen(onBack: () -> Unit) {
                 Text(text = "루틴", style = MaterialTheme.typography.headlineSmall)
             }
             Text(
-                text = "습관을 아침·저녁 루틴으로 묶어 순서대로 실천해요",
+                text = "습관을 루틴으로 묶어 원하는 순서대로 실천해요",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 12.dp),
@@ -123,15 +120,18 @@ fun RoutineBuilderScreen(onBack: () -> Unit) {
                         )
                     }
                 } else {
-                    state.routines.forEach { routine ->
+                    state.routines.forEachIndexed { index, routine ->
                         RoutineCard(
                             routine = routine,
                             memberNames = routine.orderedHabitIds.mapNotNull { state.habitsById[it]?.name },
+                            isFirst = index == 0,
+                            isLast = index == state.routines.lastIndex,
+                            onMoveUp = { viewModel.moveRoutine(routine, -1) },
+                            onMoveDown = { viewModel.moveRoutine(routine, 1) },
                             onEdit = {
                                 draft = RoutineDraft(
                                     id = routine.id,
                                     name = routine.name,
-                                    timeOfDay = routine.timeOfDay,
                                     orderedHabitIds = routine.orderedHabitIds,
                                 )
                             },
@@ -143,7 +143,7 @@ fun RoutineBuilderScreen(onBack: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = {
-                        draft = RoutineDraft(null, "", TimeOfDay.MORNING, emptyList())
+                        draft = RoutineDraft(null, "", emptyList())
                     },
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
@@ -162,6 +162,10 @@ fun RoutineBuilderScreen(onBack: () -> Unit) {
 private fun RoutineCard(
     routine: RoutineEntity,
     memberNames: List<String>,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -176,9 +180,18 @@ private fun RoutineCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Column {
+                IconButton(onClick = onMoveUp, enabled = !isFirst, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "위로")
+                }
+                IconButton(onClick = onMoveDown, enabled = !isLast, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "아래로")
+                }
+            }
+            Spacer(Modifier.width(4.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "${timeOfDayEmoji(routine.timeOfDay)} ${routine.name}",
+                    text = routine.name,
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
@@ -234,19 +247,6 @@ private fun RoutineEditor(
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
             )
-
-            Spacer(Modifier.height(20.dp))
-            Text("시간대", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeOfDay.entries.forEach { tod ->
-                    FilterChip(
-                        selected = draft.timeOfDay == tod,
-                        onClick = { onChange(draft.copy(timeOfDay = tod)) },
-                        label = { Text("${timeOfDayEmoji(tod)} ${timeOfDayLabel(tod)}") },
-                    )
-                }
-            }
 
             if (draft.orderedHabitIds.isNotEmpty()) {
                 Spacer(Modifier.height(20.dp))
@@ -382,16 +382,4 @@ private fun <T> List<T>.moved(index: Int, delta: Int): List<T> {
     val item = list.removeAt(index)
     list.add(target, item)
     return list
-}
-
-private fun timeOfDayEmoji(tod: TimeOfDay) = when (tod) {
-    TimeOfDay.MORNING -> "🌅"
-    TimeOfDay.AFTERNOON -> "☀️"
-    TimeOfDay.EVENING -> "🌙"
-}
-
-private fun timeOfDayLabel(tod: TimeOfDay) = when (tod) {
-    TimeOfDay.MORNING -> "아침"
-    TimeOfDay.AFTERNOON -> "낮"
-    TimeOfDay.EVENING -> "저녁"
 }

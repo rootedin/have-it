@@ -19,6 +19,7 @@ data class UserSettings(
     val freezeCardsAvailable: Int,
     val freezeCardsPerMonth: Int,
     val theme: AppTheme,
+    val alarmSoundKey: String,
 )
 
 class UserSettingsRepository(private val context: Context) {
@@ -29,6 +30,7 @@ class UserSettingsRepository(private val context: Context) {
         val FREEZE_CARDS_PER_MONTH = intPreferencesKey("freeze_cards_per_month")
         val FREEZE_CARDS_RESET_YEAR_MONTH = stringPreferencesKey("freeze_cards_reset_year_month")
         val THEME = stringPreferencesKey("theme")
+        val ALARM_SOUND_KEY = stringPreferencesKey("alarm_sound_key")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -45,6 +47,7 @@ class UserSettingsRepository(private val context: Context) {
             freezeCardsAvailable = available,
             freezeCardsPerMonth = perMonth,
             theme = prefs[Keys.THEME]?.let { AppTheme.valueOf(it) } ?: AppTheme.SYSTEM,
+            alarmSoundKey = prefs[Keys.ALARM_SOUND_KEY] ?: DEFAULT_ALARM_SOUND_KEY,
         )
     }
 
@@ -54,6 +57,10 @@ class UserSettingsRepository(private val context: Context) {
 
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { it[Keys.THEME] = theme.name }
+    }
+
+    suspend fun setAlarmSoundKey(key: String) {
+        context.dataStore.edit { it[Keys.ALARM_SOUND_KEY] = key }
     }
 
     suspend fun setFreezeCardsPerMonth(count: Int) {
@@ -90,5 +97,7 @@ class UserSettingsRepository(private val context: Context) {
 
     companion object {
         const val DEFAULT_FREEZE_CARDS_PER_MONTH = 1
+        // Keep in sync with AlarmSounds.DEFAULT_KEY (kept as a literal to avoid a package cycle).
+        const val DEFAULT_ALARM_SOUND_KEY = "pulse"
     }
 }

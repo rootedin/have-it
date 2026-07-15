@@ -7,8 +7,8 @@ import com.haveit.app.data.local.entity.CheckInEntity
 import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.data.local.entity.HabitFrequency
 import com.haveit.app.data.local.entity.RoutineEntity
-import com.haveit.app.data.local.entity.TimeOfDay
 import com.haveit.app.data.settings.AppTheme
+import com.haveit.app.data.settings.UserSettingsRepository
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -41,6 +41,8 @@ class BackupManager(private val app: HaveItApplication) {
                     put("triggerSentence", h.triggerSentence ?: JSONObject.NULL)
                     put("reminderHour", h.reminderHour ?: JSONObject.NULL)
                     put("reminderMinute", h.reminderMinute ?: JSONObject.NULL)
+                    put("reminderSnoozeMinutes", h.reminderSnoozeMinutes)
+                    put("reminderSnoozeMaxCount", h.reminderSnoozeMaxCount)
                     put("createdAt", h.createdAt)
                     put("archivedAt", h.archivedAt ?: JSONObject.NULL)
                 })
@@ -65,7 +67,7 @@ class BackupManager(private val app: HaveItApplication) {
                 put(JSONObject().apply {
                     put("id", r.id)
                     put("name", r.name)
-                    put("timeOfDay", r.timeOfDay.name)
+                    put("sortOrder", r.sortOrder)
                     put("orderedHabitIds", JSONArray(r.orderedHabitIds))
                 })
             }
@@ -75,6 +77,7 @@ class BackupManager(private val app: HaveItApplication) {
             put("notificationsEnabled", settings.notificationsEnabled)
             put("freezeCardsPerMonth", settings.freezeCardsPerMonth)
             put("theme", settings.theme.name)
+            put("alarmSoundKey", settings.alarmSoundKey)
         })
 
         return root.toString(2)
@@ -111,6 +114,8 @@ class BackupManager(private val app: HaveItApplication) {
                 triggerSentence = o.optStringOrNull("triggerSentence"),
                 reminderHour = o.optIntOrNull("reminderHour"),
                 reminderMinute = o.optIntOrNull("reminderMinute"),
+                reminderSnoozeMinutes = o.optInt("reminderSnoozeMinutes", HabitEntity.DEFAULT_SNOOZE_MINUTES),
+                reminderSnoozeMaxCount = o.optInt("reminderSnoozeMaxCount", HabitEntity.DEFAULT_SNOOZE_MAX_COUNT),
                 createdAt = o.optLong("createdAt", System.currentTimeMillis()),
                 archivedAt = o.optLongOrNull("archivedAt"),
             )
@@ -127,12 +132,12 @@ class BackupManager(private val app: HaveItApplication) {
             )
         }
 
-        val routines = root.optJSONArray("routines").toObjectList().map { o ->
+        val routines = root.optJSONArray("routines").toObjectList().mapIndexed { index, o ->
             val ids = o.optJSONArray("orderedHabitIds")
             RoutineEntity(
                 id = o.getString("id"),
                 name = o.getString("name"),
-                timeOfDay = TimeOfDay.valueOf(o.optString("timeOfDay", TimeOfDay.MORNING.name)),
+                sortOrder = o.optInt("sortOrder", index),
                 orderedHabitIds = if (ids != null) {
                     (0 until ids.length()).map { ids.getString(it) }
                 } else emptyList(),
@@ -153,6 +158,9 @@ class BackupManager(private val app: HaveItApplication) {
             )
             app.container.userSettingsRepository.setFreezeCardsPerMonth(
                 s.optInt("freezeCardsPerMonth", 1),
+            )
+            app.container.userSettingsRepository.setAlarmSoundKey(
+                s.optString("alarmSoundKey", UserSettingsRepository.DEFAULT_ALARM_SOUND_KEY),
             )
             runCatching { AppTheme.valueOf(s.optString("theme", AppTheme.SYSTEM.name)) }
                 .getOrNull()?.let { app.container.userSettingsRepository.setTheme(it) }

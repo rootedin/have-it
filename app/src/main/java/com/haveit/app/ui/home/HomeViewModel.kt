@@ -11,7 +11,6 @@ import com.haveit.app.data.local.entity.CheckInEntity
 import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.data.local.entity.HabitFrequency
 import com.haveit.app.data.local.entity.RoutineEntity
-import com.haveit.app.data.local.entity.TimeOfDay
 import com.haveit.app.data.repository.CheckInRepository
 import com.haveit.app.data.repository.HabitRepository
 import com.haveit.app.data.repository.RoutineRepository
@@ -109,11 +108,11 @@ class HomeViewModel(
         }
         val used = mutableSetOf<String>()
         val sections = mutableListOf<HomeSection>()
-        routines.sortedBy { it.timeOfDay.ordinal }.forEach { routine ->
+        routines.forEach { routine ->
             val items = routine.orderedHabitIds.mapNotNull { id -> byId[id] }
             items.forEach { used.add(it.habit.id) }
             if (items.isNotEmpty()) {
-                sections.add(HomeSection(routineTitle(routine), items))
+                sections.add(HomeSection(routine.name, items))
             }
         }
         val leftovers = todays.values.filter { it.habit.id !in used }
@@ -122,15 +121,6 @@ class HomeViewModel(
             sections.add(HomeSection(title, leftovers))
         }
         return sections
-    }
-
-    private fun routineTitle(routine: RoutineEntity): String {
-        val prefix = when (routine.timeOfDay) {
-            TimeOfDay.MORNING -> "🌅"
-            TimeOfDay.AFTERNOON -> "☀️"
-            TimeOfDay.EVENING -> "🌙"
-        }
-        return "$prefix ${routine.name}"
     }
 
     fun toggleToday(item: TodayHabitUi) {

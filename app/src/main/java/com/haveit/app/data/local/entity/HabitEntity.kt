@@ -16,6 +16,14 @@ data class HabitEntity(
     val triggerSentence: String?,
     val reminderHour: Int?,
     val reminderMinute: Int?,
+    val reminderSnoozeMinutes: Int,
+    val reminderSnoozeMaxCount: Int,
     val createdAt: Long,
     val archivedAt: Long?,
-)
+) {
+    companion object {
+        /** Repeat interval and give-up point for the "still not done" nag, until changed per habit. */
+        const val DEFAULT_SNOOZE_MINUTES = 10
+        const val DEFAULT_SNOOZE_MAX_COUNT = 6
+    }
+}
