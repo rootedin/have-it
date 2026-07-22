@@ -44,8 +44,12 @@ data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
     val doneCount: Int = 0,
     val totalCount: Int = 0,
+    val hasAnyHabits: Boolean = false,
 ) {
-    val isEmpty: Boolean get() = totalCount == 0
+    /** No habits created at all — shows the onboarding CTA. */
+    val isEmpty: Boolean get() = !hasAnyHabits
+    /** Has habits, but none are scheduled for today (e.g. a custom-days habit). */
+    val hasNoneToday: Boolean get() = hasAnyHabits && totalCount == 0
 }
 
 class HomeViewModel(
@@ -88,6 +92,7 @@ class HomeViewModel(
             sections = sections,
             doneCount = allItems.count { it.checked },
             totalCount = allItems.size,
+            hasAnyHabits = habits.isNotEmpty(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 

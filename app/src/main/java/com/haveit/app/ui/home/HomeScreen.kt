@@ -93,6 +93,7 @@ fun HomeScreen(
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize())
                 state.isEmpty -> EmptyState(onAddHabit = onAddHabit)
+                state.hasNoneToday -> NoHabitsTodayState()
                 else -> {
                     Spacer(Modifier.height(4.dp))
                     TodayProgressCard(
@@ -349,6 +350,29 @@ private fun ReminderChip(hour: Int, minute: Int) {
             color = MaterialTheme.colorScheme.onSecondaryContainer,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
+    }
+}
+
+@Composable
+private fun NoHabitsTodayState() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 72.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "🎈", fontSize = 44.sp)
+            Spacer(Modifier.height(12.dp))
+            Text(text = "오늘은 예정된 습관이 없어요", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "요일 지정 습관은 지정한 날에만 여기에 표시돼요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
