@@ -36,8 +36,6 @@ data class RecentDay(val date: LocalDate, val mark: DayMark)
 /** One cell in the month heatmap; [date] is null for leading blanks that pad the first week. */
 data class HeatCell(val date: LocalDate?, val mark: DayMark, val isToday: Boolean)
 
-data class NoteEntry(val date: LocalDate, val note: String)
-
 data class DetailUiState(
     val isLoading: Boolean = true,
     val habit: HabitEntity? = null,
@@ -48,8 +46,6 @@ data class DetailUiState(
     val monthLabel: String = "",
     val monthCells: List<HeatCell> = emptyList(),
     val canGoNextMonth: Boolean = false,
-    val todayNote: String = "",
-    val pastNotes: List<NoteEntry> = emptyList(),
 )
 
 class HabitDetailViewModel(
@@ -131,14 +127,6 @@ class HabitDetailViewModel(
             "최근 30일 완료율" to if (scheduled == 0) "-" else "${done * 100 / scheduled}%"
         }
 
-        val noteFmt = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN)
-        val todayNote = byDay[today.toEpochDay()]?.note.orEmpty()
-        val pastNotes = checkIns
-            .filter { !it.note.isNullOrBlank() && it.epochDay != today.toEpochDay() }
-            .sortedByDescending { it.epochDay }
-            .take(5)
-            .map { NoteEntry(LocalDate.ofEpochDay(it.epochDay), it.note!!) }
-
         return DetailUiState(
             isLoading = false,
             habit = habit,
@@ -149,8 +137,6 @@ class HabitDetailViewModel(
             monthLabel = viewMonth.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)),
             monthCells = cells,
             canGoNextMonth = offset < 0,
-            todayNote = todayNote,
-            pastNotes = pastNotes,
         )
     }
 
@@ -175,21 +161,18 @@ class HabitDetailViewModel(
         }
     }
 
-    fun saveTodayNote(text: String) {
+    /** Persist a reminder change made inline on the detail screen and re-arm the alarm. */
+    fun updateReminder(hour: Int?, minute: Int?, snoozeMinutes: Int, snoozeMaxCount: Int) {
         viewModelScope.launch {
-            val epochDay = LocalDate.now().toEpochDay()
-            val existing = checkInRepository.getForHabitOnDay(habitId, epochDay)
-            val trimmed = text.trim().ifBlank { null }
-            if (existing == null && trimmed == null) return@launch
-            checkInRepository.upsert(
-                CheckInEntity(
-                    id = existing?.id ?: UUID.randomUUID().toString(),
-                    habitId = habitId,
-                    epochDay = epochDay,
-                    completed = existing?.completed ?: false,
-                    note = trimmed,
-                ),
+            val current = uiState.value.habit ?: return@launch
+            val updated = current.copy(
+                reminderHour = hour,
+                reminderMinute = minute,
+                reminderSnoozeMinutes = snoozeMinutes,
+                reminderSnoozeMaxCount = snoozeMaxCount,
             )
+            habitRepository.update(updated)
+            ReminderScheduler(getApplication()).reschedule(updated)
         }
     }
 

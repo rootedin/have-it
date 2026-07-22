@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,8 +31,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimeInput
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,6 +53,7 @@ import com.haveit.app.data.local.entity.HabitFrequency
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.ui.components.HabitColorOptions
 import com.haveit.app.ui.components.HabitEmojiOptions
+import com.haveit.app.ui.components.ReminderSettings
 import com.haveit.app.ui.components.parseHabitColor
 
 @Composable
@@ -76,7 +74,6 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
     var reminderMinute by remember { mutableStateOf<Int?>(null) }
     var reminderSnoozeMinutes by remember { mutableStateOf(HabitEntity.DEFAULT_SNOOZE_MINUTES) }
     var reminderSnoozeMaxCount by remember { mutableStateOf(HabitEntity.DEFAULT_SNOOZE_MAX_COUNT) }
-    var showTimePicker by remember { mutableStateOf(false) }
     var showEmojiInput by remember { mutableStateOf(false) }
     val customEmoji = emoji.takeIf { it.isNotBlank() && it !in HabitEmojiOptions }
 
@@ -277,89 +274,18 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             SectionTitle("리마인더 (선택)")
             Spacer(Modifier.height(10.dp))
-            val hasReminder = reminderHour != null && reminderMinute != null
-            Surface(
-                onClick = { showTimePicker = true },
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surface,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = if (hasReminder) {
-                            "매일 %02d:%02d 알림".format(reminderHour, reminderMinute)
-                        } else {
-                            "알림 시간 설정하기"
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (hasReminder) {
-                        TextButton(onClick = {
-                            reminderHour = null
-                            reminderMinute = null
-                        }) { Text("해제") }
-                    } else {
-                        Text("🔔", fontSize = 18.sp)
-                    }
-                }
-            }
-
-            if (hasReminder) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "반복 간격",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SnoozeIntervalOptions.forEach { minutes ->
-                        FrequencyChip("${minutes}분마다", reminderSnoozeMinutes == minutes) {
-                            // Re-derive the count so the total nag window (e.g. "1시간") stays put
-                            // when only the interval changes.
-                            val impliedTotal = reminderSnoozeMaxCount * reminderSnoozeMinutes
-                            reminderSnoozeMinutes = minutes
-                            reminderSnoozeMaxCount =
-                                if (impliedTotal == 0) 0 else (impliedTotal / minutes).coerceAtLeast(1)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    text = "안 끝내면 그만 알리기",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SnoozeDurationOptionsMinutes.forEach { durationMinutes ->
-                        val count = if (durationMinutes == 0) {
-                            0
-                        } else {
-                            (durationMinutes / reminderSnoozeMinutes).coerceAtLeast(1)
-                        }
-                        val label = when {
-                            durationMinutes == 0 -> "반복 안 함"
-                            durationMinutes % 60 == 0 -> "${durationMinutes / 60}시간 후"
-                            else -> "${durationMinutes}분 후"
-                        }
-                        FrequencyChip(label, reminderSnoozeMaxCount == count) {
-                            reminderSnoozeMaxCount = count
-                        }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = snoozeSummary(reminderSnoozeMinutes, reminderSnoozeMaxCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            ReminderSettings(
+                hour = reminderHour,
+                minute = reminderMinute,
+                snoozeMinutes = reminderSnoozeMinutes,
+                snoozeMaxCount = reminderSnoozeMaxCount,
+                onChange = { h, m, sMin, sMax ->
+                    reminderHour = h
+                    reminderMinute = m
+                    reminderSnoozeMinutes = sMin
+                    reminderSnoozeMaxCount = sMax
+                },
+            )
 
             Spacer(Modifier.height(24.dp))
             SectionTitle("트리거 문장 (선택)")
@@ -401,19 +327,6 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(32.dp))
         }
-    }
-
-    if (showTimePicker) {
-        ReminderTimeDialog(
-            initialHour = reminderHour ?: 9,
-            initialMinute = reminderMinute ?: 0,
-            onConfirm = { h, m ->
-                reminderHour = h
-                reminderMinute = m
-                showTimePicker = false
-            },
-            onDismiss = { showTimePicker = false },
-        )
     }
 
     if (showEmojiInput) {
@@ -479,46 +392,6 @@ private fun CustomEmojiDialog(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ReminderTimeDialog(
-    initialHour: Int,
-    initialMinute: Int,
-    onConfirm: (Int, Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val state = rememberTimePickerState(initialHour = initialHour, initialMinute = initialMinute, is24Hour = false)
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = "알림 시간",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                )
-                TimeInput(state = state)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(onClick = onDismiss) { Text("취소") }
-                    TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("확인") }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun SectionTitle(text: String) {
     Text(
@@ -535,16 +408,4 @@ private fun FrequencyChip(label: String, selected: Boolean, onClick: () -> Unit)
         onClick = onClick,
         label = { Text(label) },
     )
-}
-
-private val SnoozeIntervalOptions = listOf(5, 10, 15, 30)
-
-/** Minutes until the nag gives up, per [FrequencyChip]; 0 means "don't repeat". */
-private val SnoozeDurationOptionsMinutes = listOf(0, 30, 60, 120)
-
-private fun snoozeSummary(intervalMinutes: Int, maxCount: Int): String {
-    if (maxCount <= 0) return "체크할 때까지 딱 한 번만 알려요"
-    val totalMinutes = intervalMinutes * maxCount
-    val durationLabel = if (totalMinutes % 60 == 0) "${totalMinutes / 60}시간" else "${totalMinutes}분"
-    return "체크 안 하면 ${intervalMinutes}분마다, 최대 ${maxCount}회(약 $durationLabel)까지 다시 알려요"
 }

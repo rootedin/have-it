@@ -31,7 +31,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +54,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.ui.components.HabitIconBubble
+import com.haveit.app.ui.components.ReminderSettings
 import com.haveit.app.ui.components.parseHabitColor
 import com.haveit.app.ui.theme.SuccessGreen
 import java.time.LocalDate
@@ -70,14 +70,9 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
 
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var noteDraft by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.isLoading, state.habit) {
         if (!state.isLoading && state.habit == null) onBack()
-    }
-    // Seed the note field once from persisted state, then let the user edit freely.
-    LaunchedEffect(state.todayNote, state.habit?.id) {
-        if (noteDraft == null && state.habit != null) noteDraft = state.todayNote
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
@@ -184,11 +179,14 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
                 MonthHeatmap(state, viewModel)
 
                 Spacer(Modifier.height(16.dp))
-                NoteSection(
-                    draft = noteDraft.orEmpty(),
-                    onDraftChange = { noteDraft = it },
-                    onSave = { viewModel.saveTodayNote(noteDraft.orEmpty()) },
-                    pastNotes = state.pastNotes,
+                ReminderCard(
+                    hour = habit.reminderHour,
+                    minute = habit.reminderMinute,
+                    snoozeMinutes = habit.reminderSnoozeMinutes,
+                    snoozeMaxCount = habit.reminderSnoozeMaxCount,
+                    onChange = { h, m, sMin, sMax ->
+                        viewModel.updateReminder(h, m, sMin, sMax)
+                    },
                 )
                 Spacer(Modifier.height(40.dp))
             }
@@ -349,57 +347,32 @@ private fun HeatCellView(cell: HeatCell, modifier: Modifier, onLongPress: (Local
 }
 
 @Composable
-private fun NoteSection(
-    draft: String,
-    onDraftChange: (String) -> Unit,
-    onSave: () -> Unit,
-    pastNotes: List<NoteEntry>,
+private fun ReminderCard(
+    hour: Int?,
+    minute: Int?,
+    snoozeMinutes: Int,
+    snoozeMaxCount: Int,
+    onChange: (hour: Int?, minute: Int?, snoozeMinutes: Int, snoozeMaxCount: Int) -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
         Column(Modifier.padding(16.dp)) {
-            Text(text = "오늘의 한 줄", style = MaterialTheme.typography.titleSmall)
+            Text(text = "리마인더", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "부담 없이, 남기고 싶을 때만",
+                text = "정해진 시간에 알림을 받아요",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = draft,
-                onValueChange = onDraftChange,
-                placeholder = { Text("예: 오늘은 개운했다 😌") },
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 3,
+            Spacer(Modifier.height(12.dp))
+            ReminderSettings(
+                hour = hour,
+                minute = minute,
+                snoozeMinutes = snoozeMinutes,
+                snoozeMaxCount = snoozeMaxCount,
+                onChange = onChange,
+                // The card is already surface-colored, so give the time tile a distinct tone.
+                tileColor = MaterialTheme.colorScheme.surfaceVariant,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onSave) { Text("저장") }
-            }
-
-            if (pastNotes.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "지난 메모",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                pastNotes.forEach { entry ->
-                    Row(Modifier.padding(vertical = 4.dp)) {
-                        Text(
-                            text = entry.date.format(DateTimeFormatter.ofPattern("M/d", Locale.KOREAN)),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.width(40.dp),
-                        )
-                        Text(text = entry.note, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
         }
     }
 }
