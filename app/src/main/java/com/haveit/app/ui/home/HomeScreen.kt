@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,16 +71,6 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddHabit,
-                shape = CircleShape,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "습관 추가")
-            }
-        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -89,7 +78,12 @@ fun HomeScreen(
                 .padding(padding)
                 .padding(horizontal = 20.dp),
         ) {
-            HomeHeader(date = state.date, onOpenReport = onOpenReport, onOpenSettings = onOpenSettings)
+            HomeHeader(
+                date = state.date,
+                onAddHabit = onAddHabit,
+                onOpenReport = onOpenReport,
+                onOpenSettings = onOpenSettings,
+            )
 
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize())
@@ -138,7 +132,12 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(date: LocalDate, onOpenReport: () -> Unit, onOpenSettings: () -> Unit) {
+private fun HomeHeader(
+    date: LocalDate,
+    onAddHabit: () -> Unit,
+    onOpenReport: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -152,6 +151,13 @@ private fun HomeHeader(date: LocalDate, onOpenReport: () -> Unit, onOpenSettings
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(text = "오늘의 습관", style = MaterialTheme.typography.headlineMedium)
+        }
+        IconButton(onClick = onAddHabit) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "습관 추가",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         IconButton(onClick = onOpenReport) {
             Icon(
@@ -265,8 +271,7 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = item.habit.triggerSentence?.takeIf { it.isNotBlank() }
-                        ?: HabitSchedule.label(item.habit.frequency, item.habit.customDays),
+                    text = HabitSchedule.label(item.habit.frequency, item.habit.customDays),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

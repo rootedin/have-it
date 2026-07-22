@@ -13,7 +13,6 @@ data class HabitEntity(
     val color: String,
     val frequency: HabitFrequency,
     val customDays: List<Int>?,
-    val triggerSentence: String?,
     val reminderHour: Int?,
     val reminderMinute: Int?,
     val reminderSnoozeMinutes: Int,

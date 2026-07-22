@@ -37,7 +37,6 @@ class BackupManager(private val app: HaveItApplication) {
                     put("color", h.color)
                     put("frequency", h.frequency.name)
                     put("customDays", h.customDays?.let { JSONArray(it) } ?: JSONArray())
-                    put("triggerSentence", h.triggerSentence ?: JSONObject.NULL)
                     put("reminderHour", h.reminderHour ?: JSONObject.NULL)
                     put("reminderMinute", h.reminderMinute ?: JSONObject.NULL)
                     put("reminderSnoozeMinutes", h.reminderSnoozeMinutes)
@@ -107,7 +106,6 @@ class BackupManager(private val app: HaveItApplication) {
                 customDays = if (days != null && days.length() > 0) {
                     (0 until days.length()).map { days.getInt(it) }
                 } else null,
-                triggerSentence = o.optStringOrNull("triggerSentence"),
                 reminderHour = o.optIntOrNull("reminderHour"),
                 reminderMinute = o.optIntOrNull("reminderMinute"),
                 reminderSnoozeMinutes = o.optInt("reminderSnoozeMinutes", HabitEntity.DEFAULT_SNOOZE_MINUTES),

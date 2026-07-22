@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.domain.schedule.HabitSchedule
+import com.haveit.app.data.local.entity.HabitFrequency
+import com.haveit.app.ui.components.FrequencyPicker
 import com.haveit.app.ui.components.HabitIconBubble
 import com.haveit.app.ui.components.ReminderSettings
 import com.haveit.app.ui.components.parseHabitColor
@@ -121,20 +123,6 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
                     }
                 }
 
-                habit.triggerSentence?.takeIf { it.isNotBlank() }?.let { trigger ->
-                    Spacer(Modifier.height(12.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        Text(
-                            text = "⚡ $trigger",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-
                 Spacer(Modifier.height(20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatTile(
@@ -148,6 +136,13 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
                         modifier = Modifier.weight(1f),
                     )
                 }
+
+                Spacer(Modifier.height(16.dp))
+                FrequencyCard(
+                    frequency = habit.frequency,
+                    customDays = habit.customDays.orEmpty().toSet(),
+                    onChange = { freq, days -> viewModel.updateFrequency(freq, days) },
+                )
 
                 Spacer(Modifier.height(16.dp))
                 MonthHeatmap(state, viewModel)
@@ -339,6 +334,31 @@ private fun HeatCellView(cell: HeatCell, modifier: Modifier, onLongPress: (Local
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor,
                 fontWeight = if (cell.isToday) FontWeight.Bold else FontWeight.Normal,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FrequencyCard(
+    frequency: HabitFrequency,
+    customDays: Set<Int>,
+    onChange: (HabitFrequency, Set<Int>) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+        Column(Modifier.padding(16.dp)) {
+            Text(text = "반복", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "예정일을 바꾸면 지난 기록의 놓침 표시도 다시 계산돼요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            FrequencyPicker(
+                frequency = frequency,
+                customDays = customDays,
+                onChange = onChange,
             )
         }
     }

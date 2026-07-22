@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,7 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.data.local.entity.HabitFrequency
-import com.haveit.app.domain.schedule.HabitSchedule
+import com.haveit.app.ui.components.FrequencyPicker
 import com.haveit.app.ui.components.HabitColorOptions
 import com.haveit.app.ui.components.HabitEmojiOptions
 import com.haveit.app.ui.components.ReminderSettings
@@ -69,7 +68,6 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
     var colorHex by remember { mutableStateOf(HabitColorOptions.first()) }
     var frequencyName by remember { mutableStateOf(HabitFrequency.DAILY.name) }
     var customDays by remember { mutableStateOf(setOf<Int>()) }
-    var trigger by remember { mutableStateOf("") }
     var reminderHour by remember { mutableStateOf<Int?>(null) }
     var reminderMinute by remember { mutableStateOf<Int?>(null) }
     var reminderSnoozeMinutes by remember { mutableStateOf(HabitEntity.DEFAULT_SNOOZE_MINUTES) }
@@ -84,7 +82,6 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
             colorHex = prefill.colorHex.ifBlank { HabitColorOptions.first() }
             frequencyName = prefill.frequency.name
             customDays = prefill.customDays
-            trigger = prefill.trigger
             reminderHour = prefill.reminderHour
             reminderMinute = prefill.reminderMinute
             reminderSnoozeMinutes = prefill.reminderSnoozeMinutes
@@ -224,81 +221,37 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-            SectionTitle("반복")
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FrequencyChip("매일", frequency == HabitFrequency.DAILY) {
-                    frequencyName = HabitFrequency.DAILY.name
-                }
-                FrequencyChip("요일 지정", frequency == HabitFrequency.CUSTOM_DAYS) {
-                    frequencyName = HabitFrequency.CUSTOM_DAYS.name
-                }
-                FrequencyChip("주 1회", frequency == HabitFrequency.WEEKLY) {
-                    frequencyName = HabitFrequency.WEEKLY.name
-                }
-            }
-            if (frequency == HabitFrequency.CUSTOM_DAYS) {
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    HabitSchedule.DAY_LABELS.forEachIndexed { index, label ->
-                        val selected = index in customDays
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (selected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                                )
-                                .clickable {
-                                    customDays =
-                                        if (selected) customDays - index else customDays + index
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
+            // Frequency and reminder are set once when creating a habit; for an existing habit
+            // they're edited in context on the detail screen, so the edit form stays identity-only.
+            if (!viewModel.isEditing) {
+                Spacer(Modifier.height(24.dp))
+                SectionTitle("반복")
+                Spacer(Modifier.height(10.dp))
+                FrequencyPicker(
+                    frequency = frequency,
+                    customDays = customDays,
+                    onChange = { freq, days ->
+                        frequencyName = freq.name
+                        customDays = days
+                    },
+                )
 
-            Spacer(Modifier.height(24.dp))
-            SectionTitle("리마인더 (선택)")
-            Spacer(Modifier.height(10.dp))
-            ReminderSettings(
-                hour = reminderHour,
-                minute = reminderMinute,
-                snoozeMinutes = reminderSnoozeMinutes,
-                snoozeMaxCount = reminderSnoozeMaxCount,
-                onChange = { h, m, sMin, sMax ->
-                    reminderHour = h
-                    reminderMinute = m
-                    reminderSnoozeMinutes = sMin
-                    reminderSnoozeMaxCount = sMax
-                },
-            )
-
-            Spacer(Modifier.height(24.dp))
-            SectionTitle("트리거 문장 (선택)")
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = trigger,
-                onValueChange = { trigger = it },
-                placeholder = { Text("예: 커피 내린 후 → 스쿼트 10개") },
-                supportingText = { Text("이미 하는 행동 뒤에 붙이면 잊지 않아요") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            )
+                Spacer(Modifier.height(24.dp))
+                SectionTitle("리마인더 (선택)")
+                Spacer(Modifier.height(10.dp))
+                ReminderSettings(
+                    hour = reminderHour,
+                    minute = reminderMinute,
+                    snoozeMinutes = reminderSnoozeMinutes,
+                    snoozeMaxCount = reminderSnoozeMaxCount,
+                    onChange = { h, m, sMin, sMax ->
+                        reminderHour = h
+                        reminderMinute = m
+                        reminderSnoozeMinutes = sMin
+                        reminderSnoozeMaxCount = sMax
+                    },
+                )
+            }
 
             Spacer(Modifier.height(28.dp))
             Button(
@@ -309,7 +262,6 @@ fun AddHabitScreen(editingHabitId: String? = null, onBack: () -> Unit) {
                         colorHex = colorHex,
                         frequency = frequency,
                         customDays = customDays.toList(),
-                        trigger = trigger,
                         reminderHour = reminderHour,
                         reminderMinute = reminderMinute,
                         reminderSnoozeMinutes = reminderSnoozeMinutes,
@@ -398,14 +350,5 @@ private fun SectionTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-@Composable
-private fun FrequencyChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
     )
 }

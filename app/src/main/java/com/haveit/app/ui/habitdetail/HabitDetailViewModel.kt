@@ -160,6 +160,22 @@ class HabitDetailViewModel(
         }
     }
 
+    /**
+     * Persist an inline frequency change. Switching to 요일 지정 with no days chosen would leave the
+     * habit scheduled on nothing, so we seed today's weekday; the day toggles then let the user adjust.
+     */
+    fun updateFrequency(frequency: HabitFrequency, customDays: Set<Int>) {
+        viewModelScope.launch {
+            val current = uiState.value.habit ?: return@launch
+            val days = if (frequency == HabitFrequency.CUSTOM_DAYS) {
+                customDays.ifEmpty { setOf(LocalDate.now().dayOfWeek.value - 1) }.sorted()
+            } else {
+                null
+            }
+            habitRepository.update(current.copy(frequency = frequency, customDays = days))
+        }
+    }
+
     /** Persist a reminder change made inline on the detail screen and re-arm the alarm. */
     fun updateReminder(hour: Int?, minute: Int?, snoozeMinutes: Int, snoozeMaxCount: Int) {
         viewModelScope.launch {

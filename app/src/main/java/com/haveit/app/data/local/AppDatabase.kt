@@ -14,7 +14,7 @@ import com.haveit.app.data.local.entity.RoutineEntity
 
 @Database(
     entities = [HabitEntity::class, CheckInEntity::class, RoutineEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -100,6 +100,29 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE UNIQUE INDEX IF NOT EXISTS `index_check_ins_habitId_epochDay` " +
                         "ON `check_ins` (`habitId`, `epochDay`)",
                 )
+            }
+        }
+
+        /** Drops the triggerSentence column (the habit-stacking trigger feature was removed). */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `habits_new` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`icon` TEXT NOT NULL, `color` TEXT NOT NULL, `frequency` TEXT NOT NULL, " +
+                        "`customDays` TEXT, `reminderHour` INTEGER, `reminderMinute` INTEGER, " +
+                        "`reminderSnoozeMinutes` INTEGER NOT NULL, `reminderSnoozeMaxCount` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `archivedAt` INTEGER, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "INSERT INTO `habits_new` (`id`, `name`, `icon`, `color`, `frequency`, `customDays`, " +
+                        "`reminderHour`, `reminderMinute`, `reminderSnoozeMinutes`, `reminderSnoozeMaxCount`, " +
+                        "`createdAt`, `archivedAt`) " +
+                        "SELECT `id`, `name`, `icon`, `color`, `frequency`, `customDays`, " +
+                        "`reminderHour`, `reminderMinute`, `reminderSnoozeMinutes`, `reminderSnoozeMaxCount`, " +
+                        "`createdAt`, `archivedAt` FROM `habits`",
+                )
+                db.execSQL("DROP TABLE `habits`")
+                db.execSQL("ALTER TABLE `habits_new` RENAME TO `habits`")
             }
         }
     }
