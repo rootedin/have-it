@@ -24,10 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +65,7 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
         viewModel(key = habitId, factory = HabitDetailViewModel.factory(app, habitId))
     val state by viewModel.uiState.collectAsState()
 
-    var menuOpen by remember { mutableStateOf(false) }
+    var confirmArchive by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.isLoading, state.habit) {
@@ -94,33 +91,10 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
                 }
                 Spacer(Modifier.weight(1f))
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "더보기")
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text("편집") },
-                            onClick = {
-                                menuOpen = false
-                                onEdit()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("보관하기") },
-                            onClick = {
-                                menuOpen = false
-                                viewModel.archive(onBack)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("삭제하기", color = MaterialTheme.colorScheme.error) },
-                            onClick = {
-                                menuOpen = false
-                                confirmDelete = true
-                            },
-                        )
-                    }
+                TextButton(onClick = onEdit) { Text("편집") }
+                TextButton(onClick = { confirmArchive = true }) { Text("보관") }
+                TextButton(onClick = { confirmDelete = true }) {
+                    Text("삭제", color = MaterialTheme.colorScheme.error)
                 }
             }
 
@@ -191,6 +165,30 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
                 Spacer(Modifier.height(40.dp))
             }
         }
+    }
+
+    if (confirmArchive) {
+        AlertDialog(
+            onDismissRequest = { confirmArchive = false },
+            title = { Text("습관 보관") },
+            text = {
+                Text(
+                    "기록은 그대로 유지돼요. 홈 목록에서만 숨겨져요.\n" +
+                        "설정 → 보관한 습관 → 복원 에서 언제든 다시 꺼낼 수 있어요.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmArchive = false
+                    viewModel.archive(onBack)
+                }) {
+                    Text("보관")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmArchive = false }) { Text("취소") }
+            },
+        )
     }
 
     if (confirmDelete) {
