@@ -30,26 +30,20 @@ data class DayBar(
     val label: String,
     /** Fraction of scheduled habits genuinely completed that day. */
     val completedRatio: Float,
-    /** Fraction protected by a freeze card (stacked on top of completed). */
-    val frozenRatio: Float,
     val scheduledCount: Int,
     val isToday: Boolean,
     val isFuture: Boolean,
 ) {
     val hasData: Boolean get() = !isFuture && scheduledCount > 0
-    val totalRatio: Float get() = completedRatio + frozenRatio
 }
 
 /** One cell in the month grid; [date] is null for leading blanks that pad the first week. */
 data class MonthReportCell(
     val date: LocalDate?,
     val completedRatio: Float,
-    val frozenRatio: Float,
     val hasData: Boolean,
     val isToday: Boolean,
-) {
-    val totalRatio: Float get() = completedRatio + frozenRatio
-}
+)
 
 data class WeeklyReportUiState(
     val isLoading: Boolean = true,
@@ -62,7 +56,6 @@ data class WeeklyReportUiState(
     val canGoNextWeek: Boolean = false,
     val bars: List<DayBar> = emptyList(),
     val weekAveragePercent: Int? = null,
-    val weekFrozenDays: Int = 0,
     val weeklyHabitTotal: Int = 0,
     val weeklyHabitDone: Int = 0,
 
@@ -72,14 +65,12 @@ data class WeeklyReportUiState(
     val canGoNextMonth: Boolean = false,
     val monthCells: List<MonthReportCell> = emptyList(),
     val monthAveragePercent: Int? = null,
-    val monthFrozenDays: Int = 0,
     val monthWeeklyHabitTotal: Int = 0,
     val monthWeeklyHabitDone: Int = 0,
 )
 
 private data class DayStats(
     val completedRatio: Float,
-    val frozenRatio: Float,
     val hasData: Boolean,
     val scheduledCount: Int,
 )
@@ -132,18 +123,13 @@ class WeeklyReportViewModel(
                     HabitSchedule.isScheduledOn(it.frequency, it.customDays, date)
             }
             var completed = 0
-            var frozen = 0
             scheduled.forEach { habit ->
                 val entry = byHabitDay[habit.id to date.toEpochDay()]
-                when {
-                    entry?.completed == true -> completed++
-                    entry?.usedFreezeCard == true -> frozen++
-                }
+                if (entry?.completed == true) completed++
             }
             val n = scheduled.size
             return DayStats(
                 completedRatio = if (n == 0) 0f else completed.toFloat() / n,
-                frozenRatio = if (n == 0) 0f else frozen.toFloat() / n,
                 hasData = !isFuture && n > 0,
                 scheduledCount = n,
             )
@@ -151,8 +137,7 @@ class WeeklyReportViewModel(
 
         fun weeklyHabitDoneInWeek(habit: HabitEntity, weekStart: LocalDate): Boolean =
             (0..6).any { off ->
-                byHabitDay[habit.id to weekStart.plusDays(off.toLong()).toEpochDay()]
-                    ?.let { it.completed || it.usedFreezeCard } == true
+                byHabitDay[habit.id to weekStart.plusDays(off.toLong()).toEpochDay()]?.completed == true
             }
 
         // ---- Week view ----
@@ -163,7 +148,6 @@ class WeeklyReportViewModel(
             DayBar(
                 label = HabitSchedule.DAY_LABELS[offset],
                 completedRatio = stats.completedRatio,
-                frozenRatio = stats.frozenRatio,
                 scheduledCount = stats.scheduledCount,
                 isToday = date == today,
                 isFuture = date.isAfter(today),
@@ -177,11 +161,11 @@ class WeeklyReportViewModel(
         val firstOfMonth = viewMonth.atDay(1)
         val leadingBlanks = firstOfMonth.dayOfWeek.value - 1 // Monday=0
         val monthCells = buildList {
-            repeat(leadingBlanks) { add(MonthReportCell(null, 0f, 0f, false, false)) }
+            repeat(leadingBlanks) { add(MonthReportCell(null, 0f, false, false)) }
             for (day in 1..viewMonth.lengthOfMonth()) {
                 val date = viewMonth.atDay(day)
                 val stats = dayStats(date)
-                add(MonthReportCell(date, stats.completedRatio, stats.frozenRatio, stats.hasData, date == today))
+                add(MonthReportCell(date, stats.completedRatio, stats.hasData, date == today))
             }
         }
         val monthWithData = monthCells.filter { it.hasData }
@@ -211,8 +195,7 @@ class WeeklyReportViewModel(
             canGoNextWeek = weekOffset < 0,
             bars = bars,
             weekAveragePercent = weekWithData.takeIf { it.isNotEmpty() }
-                ?.let { (it.map { b -> b.totalRatio }.average() * 100).roundToInt() },
-            weekFrozenDays = bars.count { it.frozenRatio > 0f },
+                ?.let { (it.map { b -> b.completedRatio }.average() * 100).roundToInt() },
             weeklyHabitTotal = weeklyHabits.size,
             weeklyHabitDone = weeklyHabits.count { habit -> weeklyHabitDoneInWeek(habit, monday) },
 
@@ -221,8 +204,7 @@ class WeeklyReportViewModel(
             canGoNextMonth = monthOffset < 0,
             monthCells = monthCells,
             monthAveragePercent = monthWithData.takeIf { it.isNotEmpty() }
-                ?.let { (it.map { c -> c.totalRatio }.average() * 100).roundToInt() },
-            monthFrozenDays = monthCells.count { it.frozenRatio > 0f },
+                ?.let { (it.map { c -> c.completedRatio }.average() * 100).roundToInt() },
             monthWeeklyHabitTotal = monthWeeklyHabitTotal,
             monthWeeklyHabitDone = monthWeeklyHabitDone,
         )

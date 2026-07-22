@@ -14,7 +14,7 @@ import com.haveit.app.data.local.entity.RoutineEntity
 
 @Database(
     entities = [HabitEntity::class, CheckInEntity::class, RoutineEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -55,6 +55,28 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE habits ADD COLUMN reminderSnoozeMaxCount INTEGER NOT NULL " +
                         "DEFAULT ${HabitEntity.DEFAULT_SNOOZE_MAX_COUNT}",
+                )
+            }
+        }
+
+        /** Removes the freeze card feature's usedFreezeCard column. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `check_ins_new` (`id` TEXT NOT NULL, `habitId` TEXT NOT NULL, " +
+                        "`epochDay` INTEGER NOT NULL, `completed` INTEGER NOT NULL, `note` TEXT, " +
+                        "PRIMARY KEY(`id`), FOREIGN KEY(`habitId`) REFERENCES `habits`(`id`) ON DELETE CASCADE)",
+                )
+                db.execSQL(
+                    "INSERT INTO `check_ins_new` (`id`, `habitId`, `epochDay`, `completed`, `note`) " +
+                        "SELECT `id`, `habitId`, `epochDay`, `completed`, `note` FROM `check_ins`",
+                )
+                db.execSQL("DROP TABLE `check_ins`")
+                db.execSQL("ALTER TABLE `check_ins_new` RENAME TO `check_ins`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_check_ins_habitId` ON `check_ins` (`habitId`)")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_check_ins_habitId_epochDay` " +
+                        "ON `check_ins` (`habitId`, `epochDay`)",
                 )
             }
         }

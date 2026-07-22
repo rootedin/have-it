@@ -14,7 +14,6 @@ import com.haveit.app.data.local.entity.RoutineEntity
 import com.haveit.app.data.repository.CheckInRepository
 import com.haveit.app.data.repository.HabitRepository
 import com.haveit.app.data.repository.RoutineRepository
-import com.haveit.app.data.settings.UserSettingsRepository
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.domain.streak.StreakCalculator
 import com.haveit.app.widget.HabitWidget
@@ -30,12 +29,11 @@ import kotlinx.coroutines.launch
 data class TodayHabitUi(
     val habit: HabitEntity,
     val doneToday: Boolean,
-    val frozenToday: Boolean,
     val doneThisWeek: Boolean,
     val streak: Int,
 ) {
     val isWeekly: Boolean get() = habit.frequency == HabitFrequency.WEEKLY
-    val checked: Boolean get() = if (isWeekly) doneToday || doneThisWeek else doneToday || frozenToday
+    val checked: Boolean get() = if (isWeekly) doneToday || doneThisWeek else doneToday
 }
 
 data class HomeSection(val title: String?, val items: List<TodayHabitUi>)
@@ -46,7 +44,6 @@ data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
     val doneCount: Int = 0,
     val totalCount: Int = 0,
-    val freezeCardsAvailable: Int = 0,
 ) {
     val isEmpty: Boolean get() = totalCount == 0
 }
@@ -56,15 +53,13 @@ class HomeViewModel(
     habitRepository: HabitRepository,
     routineRepository: RoutineRepository,
     private val checkInRepository: CheckInRepository,
-    settingsRepository: UserSettingsRepository,
 ) : AndroidViewModel(application) {
 
     val uiState: StateFlow<HomeUiState> = combine(
         habitRepository.observeActiveHabits(),
         checkInRepository.observeAll(),
         routineRepository.observeAll(),
-        settingsRepository.settings,
-    ) { habits, checkIns, routines, settings ->
+    ) { habits, checkIns, routines ->
         val today = LocalDate.now()
         val mondayEpoch = today.with(DayOfWeek.MONDAY).toEpochDay()
         val grouped = checkIns.groupBy { it.habitId }
@@ -77,7 +72,6 @@ class HomeViewModel(
                 TodayHabitUi(
                     habit = habit,
                     doneToday = todayEntry?.completed == true,
-                    frozenToday = todayEntry?.usedFreezeCard == true,
                     doneThisWeek = list.any {
                         it.completed && it.epochDay >= mondayEpoch && it.epochDay <= today.toEpochDay()
                     },
@@ -94,7 +88,6 @@ class HomeViewModel(
             sections = sections,
             doneCount = allItems.count { it.checked },
             totalCount = allItems.size,
-            freezeCardsAvailable = settings.freezeCardsAvailable,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -136,7 +129,6 @@ class HomeViewModel(
                         habitId = item.habit.id,
                         epochDay = epochDay,
                         completed = true,
-                        usedFreezeCard = existing?.usedFreezeCard ?: false,
                         note = existing?.note,
                     ),
                 )
@@ -153,7 +145,6 @@ class HomeViewModel(
                     app.container.habitRepository,
                     app.container.routineRepository,
                     app.container.checkInRepository,
-                    app.container.userSettingsRepository,
                 )
             }
         }

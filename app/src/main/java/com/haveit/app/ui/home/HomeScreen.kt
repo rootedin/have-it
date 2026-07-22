@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -52,7 +53,6 @@ import com.haveit.app.HaveItApplication
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.ui.components.HabitIconBubble
 import com.haveit.app.ui.components.parseHabitColor
-import com.haveit.app.ui.theme.FreezeBlue
 import com.haveit.app.ui.theme.SuccessGreen
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -98,7 +98,6 @@ fun HomeScreen(
                     TodayProgressCard(
                         done = state.doneCount,
                         total = state.totalCount,
-                        freezeCards = state.freezeCardsAvailable,
                         onClick = onOpenReport,
                     )
                     Spacer(Modifier.height(16.dp))
@@ -167,7 +166,7 @@ private fun HomeHeader(date: LocalDate, onOpenReport: () -> Unit, onOpenSettings
 }
 
 @Composable
-private fun TodayProgressCard(done: Int, total: Int, freezeCards: Int, onClick: () -> Unit) {
+private fun TodayProgressCard(done: Int, total: Int, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
@@ -190,12 +189,6 @@ private fun TodayProgressCard(done: Int, total: Int, freezeCards: Int, onClick: 
                         else -> "오늘 전부 해냈어요! 🎉"
                     },
                     style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "프리즈 카드 🛡 ${freezeCards}장 보유",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -272,9 +265,12 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
                 }
                 val weeklyDoneHint =
                     if (item.isWeekly && item.checked && !item.doneToday) "이번 주 완료" else null
-                if (streakText != null || weeklyDoneHint != null) {
-                    Spacer(Modifier.height(2.dp))
-                    Row {
+                val reminderHour = item.habit.reminderHour
+                val reminderMinute = item.habit.reminderMinute
+                val hasReminder = reminderHour != null && reminderMinute != null
+                if (streakText != null || weeklyDoneHint != null || hasReminder) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         if (streakText != null) {
                             Text(
                                 text = streakText,
@@ -296,13 +292,18 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
                                 color = MaterialTheme.colorScheme.tertiary,
                             )
                         }
+                        if (reminderHour != null && reminderMinute != null) {
+                            if (streakText != null || weeklyDoneHint != null) {
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            ReminderChip(hour = reminderHour, minute = reminderMinute)
+                        }
                     }
                 }
             }
             Spacer(Modifier.width(10.dp))
             CheckCircle(
                 checked = item.checked,
-                frozenOnly = item.frozenToday && !item.doneToday,
                 onToggle = onToggle,
             )
         }
@@ -310,20 +311,12 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
 }
 
 @Composable
-private fun CheckCircle(checked: Boolean, frozenOnly: Boolean, onToggle: () -> Unit) {
+private fun CheckCircle(checked: Boolean, onToggle: () -> Unit) {
     val fillColor by animateColorAsState(
-        targetValue = when {
-            frozenOnly -> FreezeBlue
-            checked -> SuccessGreen
-            else -> Color.Transparent
-        },
+        targetValue = if (checked) SuccessGreen else Color.Transparent,
         label = "checkFill",
     )
-    val borderColor = when {
-        frozenOnly -> FreezeBlue
-        checked -> SuccessGreen
-        else -> MaterialTheme.colorScheme.outline
-    }
+    val borderColor = if (checked) SuccessGreen else MaterialTheme.colorScheme.outline
     Box(
         modifier = Modifier
             .size(34.dp)
@@ -333,15 +326,29 @@ private fun CheckCircle(checked: Boolean, frozenOnly: Boolean, onToggle: () -> U
             .clickable(onClick = onToggle),
         contentAlignment = Alignment.Center,
     ) {
-        when {
-            frozenOnly -> Text(text = "🛡", fontSize = 14.sp)
-            checked -> Icon(
+        if (checked) {
+            Icon(
                 Icons.Default.Check,
                 contentDescription = "완료",
                 tint = Color.White,
                 modifier = Modifier.size(20.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun ReminderChip(hour: Int, minute: Int) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Text(
+            text = "🔔 %02d:%02d".format(hour, minute),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
     }
 }
 

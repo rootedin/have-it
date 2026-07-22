@@ -1,8 +1,6 @@
 package com.haveit.app.ui.settings
 
 import android.app.Application
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -14,7 +12,6 @@ import com.haveit.app.data.backup.BackupManager
 import com.haveit.app.data.settings.AppTheme
 import com.haveit.app.data.settings.UserSettings
 import com.haveit.app.data.settings.UserSettingsRepository
-import com.haveit.app.notification.AlarmSounds
 import com.haveit.app.notification.ReminderScheduler
 import com.haveit.app.widget.HabitWidget
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,50 +35,15 @@ class SettingsViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
-    private var previewPlayer: MediaPlayer? = null
-
     fun consumeMessage() { _message.value = null }
 
     fun setTheme(theme: AppTheme) {
         viewModelScope.launch { settingsRepository.setTheme(theme) }
     }
 
-    fun setAlarmSound(key: String) {
-        viewModelScope.launch { settingsRepository.setAlarmSoundKey(key) }
-        previewAlarmSound(key)
-    }
-
-    /** Plays the chosen tone once at alarm volume so the user can hear it before committing. */
-    fun previewAlarmSound(key: String) {
-        stopPreview()
-        val context = getApplication<Application>()
-        previewPlayer = MediaPlayer().apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build(),
-            )
-            setOnCompletionListener { stopPreview() }
-            runCatching {
-                setDataSource(context, AlarmSounds.uri(context, key))
-                setOnPreparedListener { start() }
-                prepareAsync()
-            }.onFailure { stopPreview() }
-        }
-    }
-
-    fun stopPreview() {
-        previewPlayer?.let { player ->
-            runCatching { if (player.isPlaying) player.stop() }
-            player.release()
-        }
-        previewPlayer = null
-    }
-
-    override fun onCleared() {
-        stopPreview()
-        super.onCleared()
+    /** [uri] is null when the user picks "기본 알람음" — the device's own default alarm sound. */
+    fun setAlarmSoundUri(uri: Uri?) {
+        viewModelScope.launch { settingsRepository.setAlarmSoundUri(uri?.toString()) }
     }
 
     fun setNotificationsEnabled(enabled: Boolean) {

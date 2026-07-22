@@ -11,13 +11,12 @@ class StreakCalculatorTest {
     // 2024-01-01 is a known Monday; used as a stable anchor instead of LocalDate.now().
     private val monday = LocalDate.of(2024, 1, 1)
 
-    private fun checkIn(date: LocalDate, completed: Boolean = true, usedFreezeCard: Boolean = false) =
+    private fun checkIn(date: LocalDate, completed: Boolean = true) =
         CheckInEntity(
             id = date.toString(),
             habitId = "habit-1",
             epochDay = date.toEpochDay(),
             completed = completed,
-            usedFreezeCard = usedFreezeCard,
             note = null,
         )
 
@@ -103,20 +102,6 @@ class StreakCalculatorTest {
         )
 
         assertEquals(1, streak)
-    }
-
-    @Test
-    fun `freeze card keeps the streak alive without a real completion`() {
-        val today = monday.plusDays(9) // 2024-01-10
-        val checkIns = listOf(
-            checkIn(monday.plusDays(9)), // 01-10 done
-            checkIn(monday.plusDays(8), completed = false, usedFreezeCard = true), // 01-09 frozen
-            checkIn(monday.plusDays(7)), // 01-08 done
-        )
-
-        val streak = StreakCalculator.currentStreak(HabitFrequency.DAILY, null, checkIns, today)
-
-        assertEquals(3, streak)
     }
 
     @Test

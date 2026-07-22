@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.domain.schedule.HabitSchedule
-import com.haveit.app.ui.theme.FreezeBlue
 import kotlin.math.roundToInt
 
 @Composable
@@ -161,14 +160,13 @@ private fun WeekReportContent(state: WeeklyReportUiState, onPrevious: () -> Unit
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = if (bar.hasData) "${(bar.totalRatio * 100).roundToInt()}" else "",
+                            text = if (bar.hasData) "${(bar.completedRatio * 100).roundToInt()}" else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(4.dp))
                         StackedBar(
                             completedRatio = bar.completedRatio,
-                            frozenRatio = bar.frozenRatio,
                             isToday = bar.isToday,
                             emptyTrack = !bar.hasData,
                             maxHeight = 118.dp,
@@ -186,7 +184,6 @@ private fun WeekReportContent(state: WeeklyReportUiState, onPrevious: () -> Unit
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LegendDot(MaterialTheme.colorScheme.primary, "완료")
-                LegendDot(FreezeBlue, "프리즈")
             }
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
@@ -202,22 +199,6 @@ private fun WeekReportContent(state: WeeklyReportUiState, onPrevious: () -> Unit
                     text = state.weekAveragePercent?.let { "$it%" } ?: "-",
                     style = MaterialTheme.typography.titleMedium,
                 )
-            }
-            if (state.weekFrozenDays > 0) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "🛡 프리즈로 지킨 날",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = "${state.weekFrozenDays}일",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = FreezeBlue,
-                    )
-                }
             }
         }
     }
@@ -294,7 +275,6 @@ private fun MonthReportContent(state: WeeklyReportUiState, onPrevious: () -> Uni
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LegendDot(MaterialTheme.colorScheme.primary, "완료")
-                LegendDot(FreezeBlue, "프리즈")
                 LegendDot(MaterialTheme.colorScheme.error, "놓침")
             }
             Spacer(Modifier.height(12.dp))
@@ -311,22 +291,6 @@ private fun MonthReportContent(state: WeeklyReportUiState, onPrevious: () -> Uni
                     text = state.monthAveragePercent?.let { "$it%" } ?: "-",
                     style = MaterialTheme.typography.titleMedium,
                 )
-            }
-            if (state.monthFrozenDays > 0) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "🛡 프리즈로 지킨 날",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = "${state.monthFrozenDays}일",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = FreezeBlue,
-                    )
-                }
             }
         }
     }
@@ -368,19 +332,18 @@ private fun MonthCellView(cell: MonthReportCell, modifier: Modifier) {
             Box(Modifier.aspectRatio(1f))
             return@Box
         }
-        val intensity = (0.3f + 0.6f * cell.totalRatio).coerceAtMost(1f)
+        val intensity = (0.3f + 0.6f * cell.completedRatio).coerceAtMost(1f)
         val bg = when {
             !cell.hasData -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            cell.totalRatio <= 0f -> MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
-            cell.frozenRatio > cell.completedRatio -> FreezeBlue.copy(alpha = intensity)
+            cell.completedRatio <= 0f -> MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
             else -> MaterialTheme.colorScheme.primary.copy(alpha = intensity)
         }
         val border = when {
             cell.isToday -> MaterialTheme.colorScheme.primary
-            cell.hasData && cell.totalRatio <= 0f -> MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+            cell.hasData && cell.completedRatio <= 0f -> MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
             else -> Color.Transparent
         }
-        val textColor = if (cell.hasData && cell.totalRatio >= 0.5f) Color.White
+        val textColor = if (cell.hasData && cell.completedRatio >= 0.5f) Color.White
         else MaterialTheme.colorScheme.onSurfaceVariant
         Box(
             modifier = Modifier
@@ -404,7 +367,6 @@ private fun MonthCellView(cell: MonthReportCell, modifier: Modifier) {
 @Composable
 private fun StackedBar(
     completedRatio: Float,
-    frozenRatio: Float,
     isToday: Boolean,
     emptyTrack: Boolean,
     maxHeight: Dp,
@@ -426,24 +388,11 @@ private fun StackedBar(
             )
             return
         }
-        // Frozen segment sits on top of the completed segment.
-        if (frozenRatio > 0f) {
-            Box(
-                Modifier
-                    .width(24.dp)
-                    .height(maxHeight * frozenRatio)
-                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                    .background(FreezeBlue),
-            )
-        }
         Box(
             Modifier
                 .width(24.dp)
                 .height((maxHeight * completedRatio).coerceAtLeast(if (completedRatio > 0f) 6.dp else 4.dp))
-                .clip(
-                    if (frozenRatio > 0f) RoundedCornerShape(0.dp)
-                    else RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp),
-                )
+                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
                 .background(if (completedRatio > 0f) completedColor else MaterialTheme.colorScheme.surfaceVariant),
         )
     }

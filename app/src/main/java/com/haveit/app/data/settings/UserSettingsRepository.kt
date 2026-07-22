@@ -3,10 +3,8 @@ package com.haveit.app.data.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import java.time.YearMonth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -16,38 +14,24 @@ enum class AppTheme { LIGHT, DARK, SYSTEM }
 
 data class UserSettings(
     val notificationsEnabled: Boolean,
-    val freezeCardsAvailable: Int,
-    val freezeCardsPerMonth: Int,
     val theme: AppTheme,
-    val alarmSoundKey: String,
+    val alarmSoundUri: String?,
 )
 
 class UserSettingsRepository(private val context: Context) {
 
     private object Keys {
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
-        val FREEZE_CARDS_AVAILABLE = intPreferencesKey("freeze_cards_available")
-        val FREEZE_CARDS_PER_MONTH = intPreferencesKey("freeze_cards_per_month")
-        val FREEZE_CARDS_RESET_YEAR_MONTH = stringPreferencesKey("freeze_cards_reset_year_month")
         val THEME = stringPreferencesKey("theme")
-        val ALARM_SOUND_KEY = stringPreferencesKey("alarm_sound_key")
+        val ALARM_SOUND_URI = stringPreferencesKey("alarm_sound_uri")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
-        val perMonth = prefs[Keys.FREEZE_CARDS_PER_MONTH] ?: DEFAULT_FREEZE_CARDS_PER_MONTH
-        // If the calendar month rolled over since the last reset, the effective balance
-        // is a full allowance again (the write happens lazily in tryUseFreezeCard).
-        val available = if (prefs[Keys.FREEZE_CARDS_RESET_YEAR_MONTH] != currentYearMonth()) {
-            perMonth
-        } else {
-            prefs[Keys.FREEZE_CARDS_AVAILABLE] ?: perMonth
-        }
         UserSettings(
             notificationsEnabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: true,
-            freezeCardsAvailable = available,
-            freezeCardsPerMonth = perMonth,
             theme = prefs[Keys.THEME]?.let { AppTheme.valueOf(it) } ?: AppTheme.SYSTEM,
-            alarmSoundKey = prefs[Keys.ALARM_SOUND_KEY] ?: DEFAULT_ALARM_SOUND_KEY,
+            // Null means "use the device's default alarm sound".
+            alarmSoundUri = prefs[Keys.ALARM_SOUND_URI],
         )
     }
 
@@ -59,45 +43,9 @@ class UserSettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.THEME] = theme.name }
     }
 
-    suspend fun setAlarmSoundKey(key: String) {
-        context.dataStore.edit { it[Keys.ALARM_SOUND_KEY] = key }
-    }
-
-    suspend fun setFreezeCardsPerMonth(count: Int) {
-        context.dataStore.edit { it[Keys.FREEZE_CARDS_PER_MONTH] = count }
-    }
-
-    /**
-     * Consumes one freeze card, first rolling the monthly allowance over if the calendar
-     * month has changed since the last reset. Returns false if none were available.
-     */
-    suspend fun tryUseFreezeCard(): Boolean {
-        var didUse = false
-        context.dataStore.edit { prefs ->
-            val perMonth = prefs[Keys.FREEZE_CARDS_PER_MONTH] ?: DEFAULT_FREEZE_CARDS_PER_MONTH
-            val storedYearMonth = prefs[Keys.FREEZE_CARDS_RESET_YEAR_MONTH]
-            val nowYearMonth = currentYearMonth()
-
-            var available = prefs[Keys.FREEZE_CARDS_AVAILABLE] ?: perMonth
-            if (storedYearMonth != nowYearMonth) {
-                available = perMonth
-                prefs[Keys.FREEZE_CARDS_RESET_YEAR_MONTH] = nowYearMonth
-            }
-
-            if (available > 0) {
-                available -= 1
-                didUse = true
-            }
-            prefs[Keys.FREEZE_CARDS_AVAILABLE] = available
+    suspend fun setAlarmSoundUri(uri: String?) {
+        context.dataStore.edit {
+            if (uri != null) it[Keys.ALARM_SOUND_URI] = uri else it.remove(Keys.ALARM_SOUND_URI)
         }
-        return didUse
-    }
-
-    private fun currentYearMonth(): String = YearMonth.now().toString()
-
-    companion object {
-        const val DEFAULT_FREEZE_CARDS_PER_MONTH = 1
-        // Keep in sync with AlarmSounds.DEFAULT_KEY (kept as a literal to avoid a package cycle).
-        const val DEFAULT_ALARM_SOUND_KEY = "pulse"
     }
 }

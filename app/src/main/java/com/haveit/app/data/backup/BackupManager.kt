@@ -8,7 +8,6 @@ import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.data.local.entity.HabitFrequency
 import com.haveit.app.data.local.entity.RoutineEntity
 import com.haveit.app.data.settings.AppTheme
-import com.haveit.app.data.settings.UserSettingsRepository
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -56,7 +55,6 @@ class BackupManager(private val app: HaveItApplication) {
                     put("habitId", c.habitId)
                     put("epochDay", c.epochDay)
                     put("completed", c.completed)
-                    put("usedFreezeCard", c.usedFreezeCard)
                     put("note", c.note ?: JSONObject.NULL)
                 })
             }
@@ -75,9 +73,8 @@ class BackupManager(private val app: HaveItApplication) {
 
         root.put("settings", JSONObject().apply {
             put("notificationsEnabled", settings.notificationsEnabled)
-            put("freezeCardsPerMonth", settings.freezeCardsPerMonth)
             put("theme", settings.theme.name)
-            put("alarmSoundKey", settings.alarmSoundKey)
+            put("alarmSoundUri", settings.alarmSoundUri ?: JSONObject.NULL)
         })
 
         return root.toString(2)
@@ -127,7 +124,6 @@ class BackupManager(private val app: HaveItApplication) {
                 habitId = o.getString("habitId"),
                 epochDay = o.getLong("epochDay"),
                 completed = o.optBoolean("completed", false),
-                usedFreezeCard = o.optBoolean("usedFreezeCard", false),
                 note = o.optStringOrNull("note"),
             )
         }
@@ -156,11 +152,8 @@ class BackupManager(private val app: HaveItApplication) {
             app.container.userSettingsRepository.setNotificationsEnabled(
                 s.optBoolean("notificationsEnabled", true),
             )
-            app.container.userSettingsRepository.setFreezeCardsPerMonth(
-                s.optInt("freezeCardsPerMonth", 1),
-            )
-            app.container.userSettingsRepository.setAlarmSoundKey(
-                s.optString("alarmSoundKey", UserSettingsRepository.DEFAULT_ALARM_SOUND_KEY),
+            app.container.userSettingsRepository.setAlarmSoundUri(
+                s.optStringOrNull("alarmSoundUri"),
             )
             runCatching { AppTheme.valueOf(s.optString("theme", AppTheme.SYSTEM.name)) }
                 .getOrNull()?.let { app.container.userSettingsRepository.setTheme(it) }

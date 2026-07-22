@@ -14,7 +14,7 @@ class AppContainer(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         AppDatabase.DATABASE_NAME,
-    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3).build()
+    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4).build()
 
     val habitRepository = HabitRepository(database.habitDao())
     val checkInRepository = CheckInRepository(database.checkInDao())

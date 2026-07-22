@@ -32,13 +32,13 @@ class ReminderReceiver : BroadcastReceiver() {
                 val today = LocalDate.now()
                 val alreadyDone = app.container.checkInRepository
                     .getForHabitOnDay(habitId, today.toEpochDay())
-                    ?.let { it.completed || it.usedFreezeCard } == true
+                    ?.completed == true
                 val dueToday = HabitSchedule.isScheduledOn(habit.frequency, habit.customDays, today)
                 // Snooze re-checks stop once the per-habit cap is reached; the initial fire always rings.
                 val withinSnoozeCap = !isSnooze || snoozeCount < habit.reminderSnoozeMaxCount
 
                 if (settings.notificationsEnabled && dueToday && !alreadyDone && withinSnoozeCap) {
-                    AlarmService.start(context, habit, settings.alarmSoundKey)
+                    AlarmService.start(context, habit, settings.alarmSoundUri)
                     if (habit.reminderSnoozeMaxCount > 0) {
                         ReminderScheduler(context).scheduleSnooze(
                             habitId = habit.id,

@@ -9,8 +9,7 @@ import java.time.LocalDate
 /**
  * Only scheduled days count. For daily/custom_days habits, unscheduled days are skipped
  * entirely rather than breaking the streak. For weekly habits, the scheduling unit is the
- * calendar week rather than a specific day. A freeze-carded day keeps the streak alive
- * without being a genuine completion.
+ * calendar week rather than a specific day.
  */
 object StreakCalculator {
 
@@ -41,7 +40,7 @@ object StreakCalculator {
         today: LocalDate,
     ): Int {
         fun isDone(date: LocalDate) =
-            byEpochDay[date.toEpochDay()]?.let { it.completed || it.usedFreezeCard } == true
+            byEpochDay[date.toEpochDay()]?.completed == true
 
         // Today not being done yet shouldn't zero out a streak still active as of yesterday.
         var cursor = if (isScheduled(today) && !isDone(today)) today.minusDays(1) else today
@@ -60,8 +59,7 @@ object StreakCalculator {
     private fun weeklyStreak(byEpochDay: Map<Long, CheckInEntity>, today: LocalDate): Int {
         fun weekHasCompletion(weekStart: LocalDate): Boolean =
             (0..6).any { offset ->
-                byEpochDay[weekStart.plusDays(offset.toLong()).toEpochDay()]
-                    ?.let { it.completed || it.usedFreezeCard } == true
+                byEpochDay[weekStart.plusDays(offset.toLong()).toEpochDay()]?.completed == true
             }
 
         // The current, still-in-progress week shouldn't break the streak before it's over.

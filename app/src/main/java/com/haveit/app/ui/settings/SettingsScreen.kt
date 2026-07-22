@@ -1,5 +1,9 @@
 package com.haveit.app.ui.settings
 
+import android.app.Activity
+import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -39,11 +43,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.haveit.app.HaveItApplication
 import com.haveit.app.data.backup.BackupManager
 import com.haveit.app.data.settings.AppTheme
-import com.haveit.app.notification.AlarmSounds
 
 @Composable
 fun SettingsScreen(
@@ -51,13 +55,13 @@ fun SettingsScreen(
     onOpenArchive: () -> Unit,
     onOpenRoutines: () -> Unit,
 ) {
-    val app = LocalContext.current.applicationContext as HaveItApplication
+    val context = LocalContext.current
+    val app = context.applicationContext as HaveItApplication
     val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(app))
     val settings by viewModel.settings.collectAsState()
     val message by viewModel.message.collectAsState()
     val snackbarHost = remember { SnackbarHostState() }
     var showResetDialog by remember { mutableStateOf(false) }
-    var showSoundDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -73,6 +77,18 @@ fun SettingsScreen(
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let { viewModel.importBackup(it) } }
+
+    // The system's own alarm-sound picker: lists whatever tones are on this device (or lets the
+    // user add their own) instead of the app bundling and maintaining a fixed set of tones.
+    val soundPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val uri = result.data?.let {
+            IntentCompat.getParcelableExtra(it, RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+        }
+        viewModel.setAlarmSoundUri(uri)
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -122,34 +138,6 @@ fun SettingsScreen(
                 }
 
                 Spacer(Modifier.height(24.dp))
-                SectionTitle("프리즈 카드")
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    shape = MaterialTheme.shapes.large,
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "이번 달 남은 카드",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                text = "🛡 ${current.freezeCardsAvailable} / ${current.freezeCardsPerMonth}장",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "하루 놓쳐도 스트릭이 지켜져요. 매달 1일에 다시 채워집니다.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(24.dp))
                 SectionTitle("알림")
                 Spacer(Modifier.height(8.dp))
                 Surface(
@@ -175,10 +163,34 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
+                val alarmSoundLabel = remember(current.alarmSoundUri) {
+                    current.alarmSoundUri
+                        ?.let { uriString ->
+                            runCatching {
+                                RingtoneManager.getRingtone(context, Uri.parse(uriString))?.getTitle(context)
+                            }.getOrNull()
+                        }
+                        ?: "기본 알람음"
+                }
                 NavRow(
                     title = "알람음",
-                    subtitle = AlarmSounds.byKey(current.alarmSoundKey).label,
-                    onClick = { showSoundDialog = true },
+                    subtitle = alarmSoundLabel,
+                    onClick = {
+                        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                            putExtra(
+                                RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+                                RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM),
+                            )
+                            putExtra(
+                                RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                current.alarmSoundUri?.let(Uri::parse),
+                            )
+                        }
+                        soundPickerLauncher.launch(intent)
+                    },
                 )
 
                 Spacer(Modifier.height(24.dp))
@@ -213,18 +225,6 @@ fun SettingsScreen(
         }
     }
 
-    if (showSoundDialog) {
-        val currentKey = settings?.alarmSoundKey
-        AlarmSoundDialog(
-            currentKey = currentKey,
-            onSelect = { viewModel.setAlarmSound(it) },
-            onDismiss = {
-                showSoundDialog = false
-                viewModel.stopPreview()
-            },
-        )
-    }
-
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
@@ -243,48 +243,6 @@ fun SettingsScreen(
             },
         )
     }
-}
-
-@Composable
-private fun AlarmSoundDialog(
-    currentKey: String?,
-    onSelect: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("알람음") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    text = "탭하면 미리 들어볼 수 있어요",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                val selectedKey = currentKey ?: AlarmSounds.DEFAULT_KEY
-                AlarmSounds.ALL.forEach { sound ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(sound.key) }
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = sound.key == selectedKey,
-                            onClick = { onSelect(sound.key) },
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(text = sound.label, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("완료") }
-        },
-    )
 }
 
 @Composable

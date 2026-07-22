@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.haveit.app.MainActivity
 import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.domain.schedule.HabitSchedule
 import java.time.LocalDate
@@ -26,14 +27,7 @@ class ReminderScheduler(private val context: Context) {
         val hour = habit.reminderHour ?: return
         val minute = habit.reminderMinute ?: return
         val triggerAt = nextTriggerMillis(habit.frequency.name, habit.customDays, hour, minute)
-        val pending = pendingIntent(habit.id, habit.name)
-
-        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-        if (canExact) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-        } else {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-        }
+        scheduleExact(triggerAt, pendingIntent(habit.id, habit.name))
     }
 
     fun cancel(habitId: String) {
@@ -43,17 +37,37 @@ class ReminderScheduler(private val context: Context) {
     /** Schedules a follow-up check [intervalMinutes] from now that re-notifies if the habit is still undone. */
     fun scheduleSnooze(habitId: String, habitName: String, snoozeCount: Int, intervalMinutes: Int) {
         val triggerAt = System.currentTimeMillis() + intervalMinutes * 60_000L
-        val pending = snoozePendingIntent(habitId, habitName, snoozeCount)
-        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-        if (canExact) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-        } else {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
-        }
+        scheduleExact(triggerAt, snoozePendingIntent(habitId, habitName, snoozeCount))
     }
 
     fun cancelSnooze(habitId: String) {
         alarmManager.cancel(snoozePendingIntent(habitId, null, 0))
+    }
+
+    /**
+     * Prefers [AlarmManager.setAlarmClock]: it fires at the exact time even in Doze, and being an
+     * exact alarm it's exempt from the background foreground-service-start restriction, so
+     * [ReminderReceiver] can launch [AlarmService] from a cold start without the system throwing
+     * ForegroundServiceStartNotAllowedException. The [showIntent] is the target for the system's
+     * alarm indicator; we point it at the app.
+     *
+     * That requires holding `SCHEDULE_EXACT_ALARM`, which isn't granted by default on Android 13+
+     * until the user flips it on (MainActivity sends them to that system screen). Until then, calling
+     * setAlarmClock() throws SecurityException, so fall back to an inexact alarm instead of crashing.
+     */
+    private fun scheduleExact(triggerAt: Long, operation: PendingIntent) {
+        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        if (!canExact) {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, operation)
+            return
+        }
+        val showIntent = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, showIntent), operation)
     }
 
     private fun pendingIntent(habitId: String, habitName: String?): PendingIntent {

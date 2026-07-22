@@ -12,8 +12,6 @@ import com.haveit.app.data.local.entity.HabitEntity
 import com.haveit.app.data.local.entity.HabitFrequency
 import com.haveit.app.data.repository.CheckInRepository
 import com.haveit.app.data.repository.HabitRepository
-import com.haveit.app.data.settings.UserSettings
-import com.haveit.app.data.settings.UserSettingsRepository
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.domain.streak.StreakCalculator
 import com.haveit.app.notification.ReminderScheduler
@@ -31,7 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class DayMark { DONE, FROZEN, MISSED, PENDING, OFF }
+enum class DayMark { DONE, MISSED, PENDING, OFF }
 
 data class RecentDay(val date: LocalDate, val mark: DayMark)
 
@@ -47,8 +45,6 @@ data class DetailUiState(
     val completionLabel: String = "",
     val completionText: String = "",
     val recentDays: List<RecentDay> = emptyList(),
-    val freezeCandidate: LocalDate? = null,
-    val freezeCardsAvailable: Int = 0,
     val monthLabel: String = "",
     val monthCells: List<HeatCell> = emptyList(),
     val canGoNextMonth: Boolean = false,
@@ -61,7 +57,6 @@ class HabitDetailViewModel(
     private val habitId: String,
     private val habitRepository: HabitRepository,
     private val checkInRepository: CheckInRepository,
-    private val settingsRepository: UserSettingsRepository,
 ) : AndroidViewModel(application) {
 
     private val monthOffset = MutableStateFlow(0)
@@ -69,9 +64,8 @@ class HabitDetailViewModel(
     val uiState: StateFlow<DetailUiState> = combine(
         habitRepository.observeById(habitId),
         checkInRepository.observeForHabit(habitId),
-        settingsRepository.settings,
         monthOffset,
-    ) { habit, checkIns, settings, offset -> buildState(habit, checkIns, settings, offset) }
+    ) { habit, checkIns, offset -> buildState(habit, checkIns, offset) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
 
     fun previousMonth() { monthOffset.value -= 1 }
@@ -80,7 +74,6 @@ class HabitDetailViewModel(
     private fun buildState(
         habit: HabitEntity?,
         checkIns: List<CheckInEntity>,
-        settings: UserSettings,
         offset: Int,
     ): DetailUiState {
         if (habit == null) return DetailUiState(isLoading = false)
@@ -91,18 +84,14 @@ class HabitDetailViewModel(
             val entry = byDay[date.toEpochDay()]
             return when {
                 entry?.completed == true -> DayMark.DONE
-                entry?.usedFreezeCard == true -> DayMark.FROZEN
                 date.isAfter(today) -> DayMark.OFF
-                !HabitSchedule.isActiveOn(habit.createdAt, date) -> DayMark.OFF
-                habit.frequency == HabitFrequency.WEEKLY ->
-                    if (date == today) DayMark.PENDING else DayMark.OFF
+                habit.frequency == HabitFrequency.WEEKLY -> DayMark.PENDING
                 !HabitSchedule.isScheduledOn(habit.frequency, habit.customDays, date) -> DayMark.OFF
                 date == today -> DayMark.PENDING
                 else -> DayMark.MISSED
             }
         }
-        fun doneOn(date: LocalDate) =
-            byDay[date.toEpochDay()]?.let { it.completed || it.usedFreezeCard } == true
+        fun doneOn(date: LocalDate) = byDay[date.toEpochDay()]?.completed == true
 
         val recentDays = (13 downTo 0).map { offsetDays ->
             RecentDay(today.minusDays(offsetDays.toLong()), markFor(today.minusDays(offsetDays.toLong())))
@@ -134,25 +123,12 @@ class HabitDetailViewModel(
             var done = 0
             for (i in 0..29) {
                 val date = today.minusDays(i.toLong())
-                if (HabitSchedule.isActiveOn(habit.createdAt, date) &&
-                    HabitSchedule.isScheduledOn(habit.frequency, habit.customDays, date)
-                ) {
+                if (HabitSchedule.isScheduledOn(habit.frequency, habit.customDays, date)) {
                     scheduled++
                     if (doneOn(date)) done++
                 }
             }
             "최근 30일 완료율" to if (scheduled == 0) "-" else "${done * 100 / scheduled}%"
-        }
-
-        val freezeCandidate = if (habit.frequency == HabitFrequency.WEEKLY) {
-            null
-        } else {
-            (1..7).map { today.minusDays(it.toLong()) }
-                .firstOrNull {
-                    HabitSchedule.isActiveOn(habit.createdAt, it) &&
-                        HabitSchedule.isScheduledOn(habit.frequency, habit.customDays, it)
-                }
-                ?.takeIf { !doneOn(it) }
         }
 
         val noteFmt = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN)
@@ -170,8 +146,6 @@ class HabitDetailViewModel(
             completionLabel = completionLabel,
             completionText = completionText,
             recentDays = recentDays,
-            freezeCandidate = freezeCandidate,
-            freezeCardsAvailable = settings.freezeCardsAvailable,
             monthLabel = viewMonth.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)),
             monthCells = cells,
             canGoNextMonth = offset < 0,
@@ -180,22 +154,24 @@ class HabitDetailViewModel(
         )
     }
 
-    fun useFreezeCard(date: LocalDate) {
+    fun toggleDate(date: LocalDate) {
         viewModelScope.launch {
-            if (settingsRepository.tryUseFreezeCard()) {
-                val existing = checkInRepository.getForHabitOnDay(habitId, date.toEpochDay())
+            val epochDay = date.toEpochDay()
+            val existing = checkInRepository.getForHabitOnDay(habitId, epochDay)
+            if (existing?.completed == true) {
+                checkInRepository.deleteForDay(habitId, epochDay)
+            } else {
                 checkInRepository.upsert(
                     CheckInEntity(
                         id = existing?.id ?: UUID.randomUUID().toString(),
                         habitId = habitId,
-                        epochDay = date.toEpochDay(),
-                        completed = false,
-                        usedFreezeCard = true,
+                        epochDay = epochDay,
+                        completed = true,
                         note = existing?.note,
                     ),
                 )
-                HabitWidget.refresh(getApplication())
             }
+            HabitWidget.refresh(getApplication())
         }
     }
 
@@ -211,7 +187,6 @@ class HabitDetailViewModel(
                     habitId = habitId,
                     epochDay = epochDay,
                     completed = existing?.completed ?: false,
-                    usedFreezeCard = existing?.usedFreezeCard ?: false,
                     note = trimmed,
                 ),
             )
@@ -249,7 +224,6 @@ class HabitDetailViewModel(
                         habitId,
                         app.container.habitRepository,
                         app.container.checkInRepository,
-                        app.container.userSettingsRepository,
                     )
                 }
             }

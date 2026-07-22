@@ -2,11 +2,15 @@ package com.haveit.app.notification
 
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -36,13 +40,14 @@ import kotlinx.coroutines.launch
  *
  * Sound and vibration are owned here (not on the notification channel) because a channel plays its
  * sound/vibration only once per post — that is the single blip we're trying to get away from. Owning
- * a [MediaPlayer] and driving the [Vibrator] directly lets the alarm ring until the user acts (or the
- * safety timeout elapses), and stop the instant they hit 완료.
+ * a [MediaPlayer] and driving the [Vibrator] directly lets the alarm ring until the user acts, the
+ * screen is turned off, or the safety cap elapses, and stop the instant they hit 완료.
  */
 class AlarmService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
+    private var screenOffReceiver: BroadcastReceiver? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val autoStop = Handler(Looper.getMainLooper())
     private val autoStopRunnable = Runnable { stopAlarm() }
@@ -64,7 +69,7 @@ class AlarmService : Service() {
         val icon = intent.getStringExtra(EXTRA_HABIT_ICON).orEmpty()
         val snoozeMinutes = intent.getIntExtra(EXTRA_SNOOZE_MINUTES, 0)
         val canSnooze = intent.getBooleanExtra(EXTRA_CAN_SNOOZE, false)
-        val soundKey = intent.getStringExtra(EXTRA_SOUND_KEY)
+        val soundUri = intent.getStringExtra(EXTRA_SOUND_URI)
 
         HaveItNotifications.ensureChannel(this)
         val notification = buildNotification(habitId, name, icon, snoozeMinutes, canSnooze)
@@ -79,8 +84,9 @@ class AlarmService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        startSound(soundKey)
+        startSound(soundUri)
         startVibration()
+        registerScreenOff()
         autoStop.removeCallbacks(autoStopRunnable)
         autoStop.postDelayed(autoStopRunnable, RING_TIMEOUT_MS)
     }
@@ -103,7 +109,6 @@ class AlarmService : Service() {
                         habitId = habitId,
                         epochDay = epochDay,
                         completed = true,
-                        usedFreezeCard = existing?.usedFreezeCard ?: false,
                         note = existing?.note,
                     ),
                 )
@@ -115,16 +120,23 @@ class AlarmService : Service() {
         }
     }
 
-    /** 미루기/닫기 or safety timeout: just silence. A pending snooze alarm (if any) will ring again later. */
+    /** 미루기/닫기, screen off, or safety cap: just silence. A pending snooze alarm (if any) re-rings later. */
     private fun stopAlarm() {
         stopSoundAndVibration()
         stopSelfSafely()
     }
 
-    private fun startSound(soundKey: String?) {
+    /**
+     * Uses the picked [soundUri], or the device's own default alarm sound if the user never picked
+     * one — the sound is whatever's configured on this system, not something bundled with the app.
+     */
+    private fun startSound(soundUri: String?) {
         try {
+            val uri = soundUri?.let(Uri::parse)
+                ?: RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             mediaPlayer = MediaPlayer().apply {
-                setDataSource(this@AlarmService, AlarmSounds.uri(this@AlarmService, soundKey))
+                setDataSource(this@AlarmService, uri)
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
@@ -150,8 +162,27 @@ class AlarmService : Service() {
         vibrator = v
     }
 
+    /** Ring until the screen goes off: pressing the power button silences the alarm like a real one. */
+    private fun registerScreenOff() {
+        if (screenOffReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) stopAlarm()
+            }
+        }
+        // ACTION_SCREEN_OFF is a protected system broadcast, so it can only be registered at runtime.
+        registerReceiver(receiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        screenOffReceiver = receiver
+    }
+
+    private fun unregisterScreenOff() {
+        screenOffReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenOffReceiver = null
+    }
+
     private fun stopSoundAndVibration() {
         autoStop.removeCallbacks(autoStopRunnable)
+        unregisterScreenOff()
         mediaPlayer?.let { player ->
             try {
                 if (player.isPlaying) player.stop()
@@ -248,17 +279,21 @@ class AlarmService : Service() {
         const val EXTRA_HABIT_ICON = "alarm_habit_icon"
         const val EXTRA_SNOOZE_MINUTES = "alarm_snooze_minutes"
         const val EXTRA_CAN_SNOOZE = "alarm_can_snooze"
-        const val EXTRA_SOUND_KEY = "alarm_sound_key"
+        const val EXTRA_SOUND_URI = "alarm_sound_uri"
 
         private const val NOTIFICATION_ID = 424242
         private const val REQUEST_FULL_SCREEN = 1
         private const val REQUEST_DONE = 2
         private const val REQUEST_STOP = 3
 
-        /** Rings for at most this long unattended, then goes quiet; a pending snooze re-rings later. */
-        private const val RING_TIMEOUT_MS = 60_000L
+        /**
+         * Safety cap only. The alarm normally rings until the user acts or the screen is turned off;
+         * if it's left completely unattended with the screen still on, it goes quiet after this long so
+         * it can't ring forever and drain the battery. A pending snooze re-rings later.
+         */
+        private const val RING_TIMEOUT_MS = 10 * 60_000L
 
-        fun start(context: Context, habit: HabitEntity, soundKey: String) {
+        fun start(context: Context, habit: HabitEntity, soundUri: String?) {
             val intent = Intent(context, AlarmService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_HABIT_ID, habit.id)
@@ -266,9 +301,15 @@ class AlarmService : Service() {
                 putExtra(EXTRA_HABIT_ICON, habit.icon)
                 putExtra(EXTRA_SNOOZE_MINUTES, habit.reminderSnoozeMinutes)
                 putExtra(EXTRA_CAN_SNOOZE, habit.reminderSnoozeMaxCount > 0)
-                putExtra(EXTRA_SOUND_KEY, soundKey)
+                putExtra(EXTRA_SOUND_URI, soundUri)
             }
-            ContextCompat.startForegroundService(context, intent)
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (e: IllegalStateException) {
+                // ForegroundServiceStartNotAllowedException (a subclass, API 31+): this alarm was
+                // scheduled inexact (no exact-alarm permission) and fired while the app had no
+                // foreground-service-start exemption. Nothing to recover here.
+            }
         }
     }
 }

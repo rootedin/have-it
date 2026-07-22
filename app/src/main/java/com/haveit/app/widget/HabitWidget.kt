@@ -44,7 +44,7 @@ class HabitWidget : GlanceAppWidget() {
         val habits = app.container.habitRepository.observeActiveHabits().first()
             .filter { HabitSchedule.isScheduledOn(it.frequency, it.customDays, today) }
         val checkedIds = app.container.checkInRepository.observeAll().first()
-            .filter { it.epochDay == today.toEpochDay() && (it.completed || it.usedFreezeCard) }
+            .filter { it.epochDay == today.toEpochDay() && it.completed }
             .map { it.habitId }
             .toSet()
 
@@ -135,7 +135,6 @@ class ToggleHabitAction : androidx.glance.appwidget.action.ActionCallback {
                     habitId = habitId,
                     epochDay = epochDay,
                     completed = true,
-                    usedFreezeCard = existing?.usedFreezeCard ?: false,
                     note = existing?.note,
                 ),
             )

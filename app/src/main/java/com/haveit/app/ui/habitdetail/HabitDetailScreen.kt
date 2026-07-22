@@ -2,6 +2,7 @@ package com.haveit.app.ui.habitdetail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,8 +56,8 @@ import com.haveit.app.HaveItApplication
 import com.haveit.app.domain.schedule.HabitSchedule
 import com.haveit.app.ui.components.HabitIconBubble
 import com.haveit.app.ui.components.parseHabitColor
-import com.haveit.app.ui.theme.FreezeBlue
 import com.haveit.app.ui.theme.SuccessGreen
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -179,37 +180,6 @@ fun HabitDetailScreen(habitId: String, onBack: () -> Unit, onEdit: () -> Unit) {
                     )
                 }
 
-                if (state.freezeCandidate != null && state.freezeCardsAvailable > 0) {
-                    Spacer(Modifier.height(16.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        shape = MaterialTheme.shapes.large,
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(
-                                text = "놓친 날을 지킬 수 있어요",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "${state.freezeCandidate!!.format(DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN))}에 체크가 없어요. " +
-                                    "프리즈 카드를 쓰면 스트릭이 이어져요. (남은 카드 ${state.freezeCardsAvailable}장)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                            ) {
-                                TextButton(onClick = { viewModel.useFreezeCard(state.freezeCandidate!!) }) {
-                                    Text("🛡 프리즈 카드 사용")
-                                }
-                            }
-                        }
-                    }
-                }
-
                 Spacer(Modifier.height(16.dp))
                 MonthHeatmap(state, viewModel)
 
@@ -266,6 +236,8 @@ private fun StatTile(label: String, value: String, modifier: Modifier = Modifier
 
 @Composable
 private fun MonthHeatmap(state: DetailUiState, viewModel: HabitDetailViewModel) {
+    var editDate by remember { mutableStateOf<LocalDate?>(null) }
+
     Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -300,7 +272,9 @@ private fun MonthHeatmap(state: DetailUiState, viewModel: HabitDetailViewModel) 
             Spacer(Modifier.height(6.dp))
             state.monthCells.chunked(7).forEach { week ->
                 Row(Modifier.fillMaxWidth()) {
-                    week.forEach { cell -> HeatCellView(cell, Modifier.weight(1f)) }
+                    week.forEach { cell ->
+                        HeatCellView(cell, Modifier.weight(1f), onLongPress = { editDate = it })
+                    }
                     repeat(7 - week.size) { Box(Modifier.weight(1f)) }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -309,10 +283,31 @@ private fun MonthHeatmap(state: DetailUiState, viewModel: HabitDetailViewModel) 
             Legend()
         }
     }
+
+    val target = editDate
+    if (target != null) {
+        val isDone = state.monthCells.firstOrNull { it.date == target }?.mark == DayMark.DONE
+        AlertDialog(
+            onDismissRequest = { editDate = null },
+            title = { Text(target.format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN))) },
+            text = { Text(if (isDone) "이 날의 완료 표시를 취소할까요?" else "이 날을 완료로 표시할까요?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.toggleDate(target)
+                    editDate = null
+                }) {
+                    Text(if (isDone) "완료 취소" else "완료로 표시")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editDate = null }) { Text("취소") }
+            },
+        )
+    }
 }
 
 @Composable
-private fun HeatCellView(cell: HeatCell, modifier: Modifier) {
+private fun HeatCellView(cell: HeatCell, modifier: Modifier, onLongPress: (LocalDate) -> Unit) {
     Box(modifier = modifier.padding(2.dp), contentAlignment = Alignment.Center) {
         if (cell.date == null) {
             Box(Modifier.aspectRatio(1f))
@@ -320,7 +315,6 @@ private fun HeatCellView(cell: HeatCell, modifier: Modifier) {
         }
         val bg = when (cell.mark) {
             DayMark.DONE -> SuccessGreen
-            DayMark.FROZEN -> FreezeBlue
             DayMark.MISSED -> MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
             DayMark.PENDING -> Color.Transparent
             DayMark.OFF -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -331,7 +325,7 @@ private fun HeatCellView(cell: HeatCell, modifier: Modifier) {
             else -> Color.Transparent
         }
         val textColor = when (cell.mark) {
-            DayMark.DONE, DayMark.FROZEN -> Color.White
+            DayMark.DONE -> Color.White
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
         Box(
@@ -340,11 +334,12 @@ private fun HeatCellView(cell: HeatCell, modifier: Modifier) {
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(8.dp))
                 .background(bg)
-                .border(if (cell.isToday) 2.dp else 1.dp, border, RoundedCornerShape(8.dp)),
+                .border(if (cell.isToday) 2.dp else 1.dp, border, RoundedCornerShape(8.dp))
+                .combinedClickable(onClick = {}, onLongClick = { onLongPress(cell.date) }),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = if (cell.mark == DayMark.FROZEN) "🛡" else cell.date.dayOfMonth.toString(),
+                text = cell.date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.labelSmall,
                 color = textColor,
                 fontWeight = if (cell.isToday) FontWeight.Bold else FontWeight.Normal,
@@ -413,7 +408,6 @@ private fun NoteSection(
 private fun Legend() {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         LegendItem(SuccessGreen, "완료")
-        LegendItem(FreezeBlue, "프리즈")
         LegendItem(MaterialTheme.colorScheme.error, "놓침")
         LegendItem(MaterialTheme.colorScheme.surfaceVariant, "예정 없음")
     }

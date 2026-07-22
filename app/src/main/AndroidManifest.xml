@@ -4,6 +4,11 @@
     <!-- No INTERNET permission: this app is local-only by design, no server/cloud communication. -->
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Reminders use AlarmManager.setAlarmClock() so they fire exactly (even in Doze / when the app
+         isn't running) and are exempt from the foreground-service-start restriction. That still needs
+         SCHEDULE_EXACT_ALARM, which isn't granted by default on Android 13+: MainActivity sends the
+         user to the system toggle for it, and ReminderScheduler falls back to an inexact alarm until
+         it's granted so scheduling never crashes. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />

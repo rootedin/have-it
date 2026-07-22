@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -36,10 +37,33 @@ import java.time.format.DateTimeFormatter
  */
 class AlarmActivity : ComponentActivity() {
 
+    /** Set once the user picks 완료 or 닫기, so we stop trapping the screen and let the activity finish. */
+    private var handled = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockScreen()
+        // Swallow Back: like a real alarm, this screen can only be left via the on-screen 완료/닫기 buttons.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = Unit
+        })
         renderFrom(intent)
+    }
+
+    /** Home / app-switch while the alarm is still unhandled: pull the alarm screen back to the front. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (handled) return
+        startActivity(
+            Intent(this, AlarmActivity::class.java).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT,
+                )
+                this@AlarmActivity.intent.extras?.let { putExtras(it) }
+            },
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -63,10 +87,12 @@ class AlarmActivity : ComponentActivity() {
                     canSnooze = canSnooze,
                     snoozeMinutes = snoozeMinutes,
                     onDone = {
+                        handled = true
                         sendCommand(AlarmService.ACTION_DONE, habitId)
                         finish()
                     },
                     onDismiss = {
+                        handled = true
                         sendCommand(AlarmService.ACTION_STOP, habitId)
                         finish()
                     },

@@ -12,3 +12,6 @@ app/build/
 app/schemas/
 *.log
 .claude/
+keystore.properties
+*.jks
+*.keystore
