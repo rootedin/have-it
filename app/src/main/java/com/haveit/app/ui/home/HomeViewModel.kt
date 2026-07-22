@@ -31,6 +31,8 @@ data class TodayHabitUi(
     val doneToday: Boolean,
     val doneThisWeek: Boolean,
     val streak: Int,
+    /** Whether the habit is actually due today. Non-due habits are still listed, just de-emphasized. */
+    val scheduledToday: Boolean = true,
 ) {
     val isWeekly: Boolean get() = habit.frequency == HabitFrequency.WEEKLY
     val checked: Boolean get() = if (isWeekly) doneToday || doneThisWeek else doneToday
@@ -48,8 +50,6 @@ data class HomeUiState(
 ) {
     /** No habits created at all — shows the onboarding CTA. */
     val isEmpty: Boolean get() = !hasAnyHabits
-    /** Has habits, but none are scheduled for today (e.g. a custom-days habit). */
-    val hasNoneToday: Boolean get() = hasAnyHabits && totalCount == 0
 }
 
 class HomeViewModel(
@@ -68,30 +68,39 @@ class HomeViewModel(
         val mondayEpoch = today.with(DayOfWeek.MONDAY).toEpochDay()
         val grouped = checkIns.groupBy { it.habitId }
 
-        val todays = habits
-            .filter { HabitSchedule.isScheduledOn(it.frequency, it.customDays, today) }
-            .associateWith { habit ->
-                val list = grouped[habit.id].orEmpty()
-                val todayEntry = list.find { it.epochDay == today.toEpochDay() }
-                TodayHabitUi(
-                    habit = habit,
-                    doneToday = todayEntry?.completed == true,
-                    doneThisWeek = list.any {
-                        it.completed && it.epochDay >= mondayEpoch && it.epochDay <= today.toEpochDay()
-                    },
-                    streak = StreakCalculator.currentStreak(habit.frequency, habit.customDays, list, today),
-                )
-            }
+        fun uiFor(habit: HabitEntity, scheduledToday: Boolean): TodayHabitUi {
+            val list = grouped[habit.id].orEmpty()
+            val todayEntry = list.find { it.epochDay == today.toEpochDay() }
+            return TodayHabitUi(
+                habit = habit,
+                doneToday = todayEntry?.completed == true,
+                doneThisWeek = list.any {
+                    it.completed && it.epochDay >= mondayEpoch && it.epochDay <= today.toEpochDay()
+                },
+                streak = StreakCalculator.currentStreak(habit.frequency, habit.customDays, list, today),
+                scheduledToday = scheduledToday,
+            )
+        }
 
-        val sections = buildSections(todays, routines)
-        val allItems = sections.flatMap { it.items }
+        val (scheduled, unscheduled) =
+            habits.partition { HabitSchedule.isScheduledOn(it.frequency, it.customDays, today) }
+
+        val todays = scheduled.associateWith { uiFor(it, scheduledToday = true) }
+        val sections = buildSections(todays, routines).toMutableList()
+        // Habits not due today still appear at the bottom, dimmed, so adding one never looks like it failed.
+        if (unscheduled.isNotEmpty()) {
+            sections.add(HomeSection("다른 날 습관", unscheduled.map { uiFor(it, scheduledToday = false) }))
+        }
+
+        // Progress reflects only what's actually due today.
+        val todayItems = todays.values
 
         HomeUiState(
             isLoading = false,
             date = today,
             sections = sections,
-            doneCount = allItems.count { it.checked },
-            totalCount = allItems.size,
+            doneCount = todayItems.count { it.checked },
+            totalCount = todayItems.size,
             hasAnyHabits = habits.isNotEmpty(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())

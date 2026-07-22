@@ -39,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -93,15 +94,18 @@ fun HomeScreen(
             when {
                 state.isLoading -> Box(Modifier.fillMaxSize())
                 state.isEmpty -> EmptyState(onAddHabit = onAddHabit)
-                state.hasNoneToday -> NoHabitsTodayState()
                 else -> {
-                    Spacer(Modifier.height(4.dp))
-                    TodayProgressCard(
-                        done = state.doneCount,
-                        total = state.totalCount,
-                        onClick = onOpenReport,
-                    )
-                    Spacer(Modifier.height(16.dp))
+                    if (state.totalCount > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        TodayProgressCard(
+                            done = state.doneCount,
+                            total = state.totalCount,
+                            onClick = onOpenReport,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                    }
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(bottom = 96.dp),
@@ -239,7 +243,9 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 13.dp),
+                .padding(horizontal = 14.dp, vertical = 13.dp)
+                // Habits not due today are shown for reassurance but visually receded.
+                .alpha(if (item.scheduledToday) 1f else 0.5f),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HabitIconBubble(emoji = item.habit.icon, color = habitColor, size = 46.dp)
@@ -303,10 +309,12 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
                 }
             }
             Spacer(Modifier.width(10.dp))
-            CheckCircle(
-                checked = item.checked,
-                onToggle = onToggle,
-            )
+            if (item.scheduledToday) {
+                CheckCircle(
+                    checked = item.checked,
+                    onToggle = onToggle,
+                )
+            }
         }
     }
 }
@@ -350,29 +358,6 @@ private fun ReminderChip(hour: Int, minute: Int) {
             color = MaterialTheme.colorScheme.onSecondaryContainer,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
-    }
-}
-
-@Composable
-private fun NoHabitsTodayState() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 72.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "🎈", fontSize = 44.sp)
-            Spacer(Modifier.height(12.dp))
-            Text(text = "오늘은 예정된 습관이 없어요", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "요일 지정 습관은 지정한 날에만 여기에 표시돼요.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
     }
 }
 
