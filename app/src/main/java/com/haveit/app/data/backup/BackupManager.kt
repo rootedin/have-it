@@ -55,7 +55,6 @@ class BackupManager(private val app: HaveItApplication) {
                     put("habitId", c.habitId)
                     put("epochDay", c.epochDay)
                     put("completed", c.completed)
-                    put("note", c.note ?: JSONObject.NULL)
                 })
             }
         })
@@ -124,7 +123,6 @@ class BackupManager(private val app: HaveItApplication) {
                 habitId = o.getString("habitId"),
                 epochDay = o.getLong("epochDay"),
                 completed = o.optBoolean("completed", false),
-                note = o.optStringOrNull("note"),
             )
         }
 

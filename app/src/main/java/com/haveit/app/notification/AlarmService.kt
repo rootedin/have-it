@@ -109,7 +109,6 @@ class AlarmService : Service() {
                         habitId = habitId,
                         epochDay = epochDay,
                         completed = true,
-                        note = existing?.note,
                     ),
                 )
                 ReminderScheduler(this@AlarmService).cancelSnooze(habitId)

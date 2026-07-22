@@ -143,7 +143,6 @@ class HomeViewModel(
                         habitId = item.habit.id,
                         epochDay = epochDay,
                         completed = true,
-                        note = existing?.note,
                     ),
                 )
             }

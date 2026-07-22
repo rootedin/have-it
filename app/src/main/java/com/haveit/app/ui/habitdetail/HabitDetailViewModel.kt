@@ -153,7 +153,6 @@ class HabitDetailViewModel(
                         habitId = habitId,
                         epochDay = epochDay,
                         completed = true,
-                        note = existing?.note,
                     ),
                 )
             }

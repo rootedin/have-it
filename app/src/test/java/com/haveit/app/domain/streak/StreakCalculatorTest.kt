@@ -17,7 +17,6 @@ class StreakCalculatorTest {
             habitId = "habit-1",
             epochDay = date.toEpochDay(),
             completed = completed,
-            note = null,
         )
 
     @Test

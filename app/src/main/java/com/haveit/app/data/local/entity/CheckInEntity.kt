@@ -25,5 +25,4 @@ data class CheckInEntity(
     val habitId: String,
     val epochDay: Long,
     val completed: Boolean,
-    val note: String?,
 )

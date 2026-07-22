@@ -135,7 +135,6 @@ class ToggleHabitAction : androidx.glance.appwidget.action.ActionCallback {
                     habitId = habitId,
                     epochDay = epochDay,
                     completed = true,
-                    note = existing?.note,
                 ),
             )
         }
