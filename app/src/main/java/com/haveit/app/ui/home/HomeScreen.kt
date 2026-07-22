@@ -243,14 +243,21 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 13.dp)
-                // Habits not due today are shown for reassurance but visually receded.
-                .alpha(if (item.scheduledToday) 1f else 0.5f),
+                .padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HabitIconBubble(emoji = item.habit.icon, color = habitColor, size = 46.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
+            // Habits not due today can still be checked, but their info is visually receded
+            // so the day's actual agenda stays front and center. The check circle stays full
+            // strength so it still reads as tappable.
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .alpha(if (item.scheduledToday) 1f else 0.5f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HabitIconBubble(emoji = item.habit.icon, color = habitColor, size = 46.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
                 Text(
                     text = item.habit.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -307,14 +314,13 @@ private fun HabitRow(item: TodayHabitUi, onToggle: () -> Unit, onClick: () -> Un
                         }
                     }
                 }
+                }
             }
             Spacer(Modifier.width(10.dp))
-            if (item.scheduledToday) {
-                CheckCircle(
-                    checked = item.checked,
-                    onToggle = onToggle,
-                )
-            }
+            CheckCircle(
+                checked = item.checked,
+                onToggle = onToggle,
+            )
         }
     }
 }
